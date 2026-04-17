@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CalREDIE Surveillance Dashboard — Mono County</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0a0e1a; --surface:#111827; --surface2:#1a2234; --border:#1e2d47;
+  --accent:#00d4aa; --accent2:#4f9cf9; --accent3:#f97316; --accent4:#a78bfa; --accent5:#fb7185;
+  --text:#e2e8f0; --muted:#64748b; --grid:rgba(255,255,255,0.04);
+  --up:#00d4aa; --down:#f87171; --warn-col:#fbbf24;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
+
+/* ── NAV ── */
+nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 32px;display:flex;align-items:stretch;position:sticky;top:0;z-index:300;}
+.nav-brand{display:flex;align-items:center;gap:12px;padding:14px 0;margin-right:32px;}
+.logo{width:36px;height:36px;background:linear-gradient(135deg,#00d4aa,#4f9cf9);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:10px;color:#0a0e1a;font-weight:500;flex-shrink:0;}
+.brand-text h1{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;}
+.brand-text p{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+.nav-tabs{display:flex;align-items:stretch;gap:0;}
+.tab-btn{background:none;border:none;padding:0 18px;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;white-space:nowrap;}
+.tab-btn:hover{color:var(--text);}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+.nav-chips{margin-left:auto;display:flex;align-items:center;gap:8px;padding:14px 0;}
+.chip{padding:4px 10px;border-radius:20px;border:1px solid var(--border);font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);}
+.chip.accent{border-color:var(--accent);color:var(--accent);background:rgba(0,212,170,0.07);}
+.chip.warn{border-color:var(--accent3);color:var(--accent3);background:rgba(249,115,22,0.07);}
+.chip.updated{border-color:#a78bfa;color:#a78bfa;background:rgba(167,139,250,0.07);}
+
+/* ── PAGES ── */
+.page{display:none;padding:24px 32px;max-width:1600px;margin:0 auto;}
+.page.active{display:block;}
+
+/* ══════════════════════════════════
+   NEW: KPI TREND CARDS
+══════════════════════════════════ */
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;animation:fadeUp .4s ease both;transition:border-color .2s;}
+.kpi:hover{border-color:rgba(255,255,255,0.12);}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:12px 12px 0 0;}
+.kpi:nth-child(1)::before{background:var(--accent);}  .kpi:nth-child(2)::before{background:var(--accent2);}
+.kpi:nth-child(3)::before{background:var(--accent3);} .kpi:nth-child(4)::before{background:var(--accent4);}
+.kpi:nth-child(5)::before{background:var(--accent5);}
+.kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:6px;}
+.kpi-value{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;line-height:1;}
+.kpi-sub{font-size:10px;color:var(--muted);margin-top:3px;}
+
+/* Trend bar sits below the main value */
+.kpi-trend{display:flex;align-items:center;gap:7px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+.trend-pill{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;}
+.trend-pill.up  {background:rgba(0,212,170,0.12);color:var(--up);}
+.trend-pill.down{background:rgba(248,113,113,0.12);color:var(--down);}
+.trend-pill.flat{background:rgba(100,116,139,0.12);color:var(--muted);}
+.trend-arrow{font-size:11px;line-height:1;}
+.trend-ctx{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+
+/* sparkline ghost behind value */
+.kpi-spark{position:absolute;bottom:6px;right:10px;opacity:0.08;pointer-events:none;}
+
+/* ══════════════════════════════════
+   NEW: DISEASES OF CONCERN PANEL
+══════════════════════════════════ */
+.doc-panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:20px;overflow:hidden;animation:fadeUp .4s ease both;}
+.doc-header{display:flex;align-items:center;justify-content:space-between;padding:13px 20px;background:var(--surface2);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px;}
+.doc-title-row{display:flex;align-items:center;gap:10px;}
+.doc-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;}
+.pulse-dot{width:9px;height:9px;border-radius:50%;background:#f87171;position:relative;flex-shrink:0;}
+.pulse-dot::after{content:'';position:absolute;inset:-4px;border-radius:50%;background:#f87171;opacity:.3;animation:pulse 1.8s ease-out infinite;}
+@keyframes pulse{0%{transform:scale(1);opacity:.3}70%{transform:scale(2.2);opacity:0}100%{transform:scale(1);opacity:0}}
+.doc-meta{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+.doc-legend{display:flex;align-items:center;gap:14px;}
+.doc-leg-item{display:flex;align-items:center;gap:5px;font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);}
+.leg-dot{width:7px;height:7px;border-radius:50%;}
+
+.doc-col-heads{display:grid;grid-template-columns:28px 1fr 72px 72px 80px 110px;gap:8px;padding:7px 20px;font-family:'DM Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);background:rgba(0,0,0,.15);}
+.doc-row{display:grid;grid-template-columns:28px 1fr 72px 72px 80px 110px;gap:8px;align-items:center;padding:10px 20px;border-bottom:1px solid rgba(255,255,255,0.03);transition:background .15s;cursor:default;}
+.doc-row:last-child{border-bottom:none;}
+.doc-row:hover{background:rgba(255,255,255,0.02);}
+
+.sev-badge{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;}
+.sev-high  {background:rgba(248,113,113,.2);color:#f87171;}
+.sev-warn  {background:rgba(251,191,36,.2); color:#fbbf24;}
+.sev-watch {background:rgba(79,156,249,.2); color:#4f9cf9;}
+.sev-ok    {background:rgba(100,116,139,.15);color:var(--muted);}
+
+.doc-dis-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.doc-num{font-family:'DM Mono',monospace;font-size:12px;text-align:right;}
+.doc-chg{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:12px;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;justify-self:end;}
+.chg-up  {background:rgba(248,113,113,.15);color:#f87171;}
+.chg-down{background:rgba(0,212,170,.15);  color:var(--up);}
+.chg-flat{background:rgba(100,116,139,.12);color:var(--muted);}
+.doc-tag{padding:3px 9px;border-radius:10px;font-size:10px;font-family:'DM Mono',monospace;font-weight:600;white-space:nowrap;justify-self:start;}
+.tag-alert   {background:rgba(248,113,113,.12);color:#f87171;border:1px solid rgba(248,113,113,.25);}
+.tag-elevated{background:rgba(251,191,36,.12); color:#fbbf24;border:1px solid rgba(251,191,36,.25);}
+.tag-watch   {background:rgba(79,156,249,.12); color:#4f9cf9;border:1px solid rgba(79,156,249,.25);}
+.tag-baseline{background:rgba(100,116,139,.08);color:var(--muted);border:1px solid var(--border);}
+
+.doc-footnote{padding:9px 20px;font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);background:rgba(0,0,0,.12);border-top:1px solid var(--border);}
+
+/* ══════════════════════════════════
+   NEW: PEDIATRIC / ADULT TOGGLE
+══════════════════════════════════ */
+.age-panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;animation:fadeUp .4s ease both;}
+.age-panel-header{display:flex;align-items:center;justify-content:space-between;padding:13px 20px;background:var(--surface2);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px;}
+.age-panel-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;}
+
+.age-toggle{display:flex;background:var(--bg);border-radius:8px;padding:3px;gap:3px;border:1px solid var(--border);}
+.age-btn{padding:6px 18px;border-radius:6px;border:none;cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;transition:all .18s;background:transparent;color:var(--muted);letter-spacing:.04em;}
+.age-btn.active{background:var(--accent2);color:#fff;box-shadow:0 2px 10px rgba(79,156,249,.3);}
+.age-btn:hover:not(.active){background:var(--surface2);color:var(--text);}
+
+/* summary stat bar */
+.age-stats-bar{display:flex;align-items:center;gap:0;border-bottom:1px solid var(--border);}
+.age-stat{flex:1;padding:12px 20px;border-right:1px solid var(--border);}
+.age-stat:last-child{border-right:none;}
+.age-stat-val{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;line-height:1;}
+.age-stat-label{font-family:'DM Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:3px;}
+
+.age-content{display:none;}
+.age-content.visible{display:block;}
+
+/* disease breakdown grid */
+.age-dis-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1px;background:var(--border);}
+.age-dis-card{background:var(--surface);padding:14px 16px;transition:background .15s;}
+.age-dis-card:hover{background:var(--surface2);}
+.adc-name{font-size:11px;font-weight:500;color:var(--text);margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.adc-bar-track{height:5px;background:rgba(255,255,255,0.05);border-radius:3px;margin-bottom:6px;overflow:hidden;}
+.adc-bar-fill{height:100%;border-radius:3px;transition:width .5s cubic-bezier(.4,0,.2,1);}
+.bar-ped  {background:linear-gradient(90deg,#4f9cf9,#00d4aa);}
+.bar-adult{background:linear-gradient(90deg,#f97316,#fb7185);}
+.adc-counts{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+.adc-n{color:var(--text);font-weight:500;}
+
+.age-chart-row{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--border);}
+.age-chart-cell{padding:18px 20px;border-right:1px solid var(--border);}
+.age-chart-cell:last-child{border-right:none;}
+.age-chart-title{font-family:'DM Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px;}
+.age-note{padding:9px 20px;font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);background:rgba(0,0,0,.12);border-top:1px solid var(--border);}
+
+/* ── SECTION LABEL ── */
+.sec{font-family:'DM Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin:20px 0 10px;display:flex;align-items:center;gap:10px;}
+.sec::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* ── CARD ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;animation:fadeUp .4s ease both;}
+.card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;}
+.card-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;}
+.card-sub{font-size:10px;color:var(--muted);margin-top:2px;font-family:'DM Mono',monospace;}
+.badge{font-family:'DM Mono',monospace;font-size:9px;padding:3px 7px;border-radius:6px;background:rgba(255,255,255,0.05);color:var(--muted);border:1px solid var(--border);white-space:nowrap;}
+
+/* ── GRIDS ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.g3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;}
+.g-full{display:grid;grid-template-columns:1fr;gap:12px;}
+.mb{margin-bottom:12px;}
+
+/* ── CHART HEIGHTS ── */
+.h200{height:200px;position:relative;} .h220{height:220px;position:relative;} .h260{height:260px;position:relative;}
+.h280{height:280px;position:relative;}
+.h300{height:300px;position:relative;} .h340{height:340px;position:relative;}
+.h380{height:380px;position:relative;} .h420{height:420px;position:relative;}
+
+/* ── DISEASE RANKED LIST ── */
+.dis-list{margin-top:4px;}
+.dis-row{display:flex;align-items:center;padding:7px 0;border-bottom:1px solid var(--grid);gap:8px;}
+.dis-row:last-child{border-bottom:none;}
+.dis-rank{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);width:16px;flex-shrink:0;}
+.dis-name{font-size:11px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dis-bar-wrap{width:70px;background:var(--surface2);height:3px;border-radius:2px;}
+.dis-bar{height:3px;border-radius:2px;}
+.dis-count{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);width:34px;text-align:right;flex-shrink:0;}
+
+/* ── SEASONAL PAGE ── */
+select,input[type=range]{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:7px;font-family:'DM Mono',monospace;font-size:10px;outline:none;cursor:pointer;}
+select:focus{border-color:var(--accent);}
+
+/* ── SEASONAL HEATMAP TABLE ── */
+.sea-table-wrap{overflow-x:auto;}
+table.sea{border-collapse:separate;border-spacing:3px;font-family:'DM Mono',monospace;font-size:11px;width:100%;}
+table.sea th{padding:5px 8px;color:var(--muted);font-weight:500;text-align:center;white-space:nowrap;position:sticky;top:0;background:var(--surface);z-index:5;}
+table.sea th.dis-th{text-align:left;left:0;z-index:6;min-width:160px;}
+table.sea td{border-radius:5px;cursor:default;transition:transform .1s;text-align:center;}
+table.sea td:hover{transform:scale(1.08);z-index:5;position:relative;}
+table.sea td.dis-td{padding:5px 8px;text-align:left;white-space:nowrap;position:sticky;left:0;background:var(--surface);z-index:4;font-size:11px;}
+.sea-cell{width:52px;height:32px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;border-radius:5px;color:rgba(255,255,255,0.9);}
+.sea-zero{background:var(--surface2);color:var(--border);}
+
+/* ── ZIP HEATMAP PAGE ── */
+.zip-layout{display:grid;grid-template-columns:300px 1fr;gap:12px;align-items:start;}
+.map-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;position:sticky;top:60px;}
+#mapSvg{width:100%;background:var(--surface2);border-radius:8px;border:1px solid var(--border);}
+.zip-legend{margin-top:12px;}
+.zli{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;transition:background .15s;font-size:11px;}
+.zli:hover,.zli.active{background:var(--surface2);}
+.zli-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.zli-label{flex:1;}
+.zli-n{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+.scale-bar{display:flex;align-items:center;gap:8px;margin-top:12px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+.scale-grad{height:8px;width:130px;border-radius:4px;background:linear-gradient(to right,#1a2234,#00d4aa);border:1px solid var(--border);}
+.zip-controls{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;}
+.zip-controls label{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+input[type=search]{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:7px;font-family:'DM Mono',monospace;font-size:10px;outline:none;width:200px;}
+input[type=search]::placeholder{color:var(--muted);}
+input[type=search]:focus{border-color:var(--accent);}
+.ht-wrap{overflow-x:auto;}
+table.ht{border-collapse:separate;border-spacing:3px;font-family:'DM Mono',monospace;font-size:11px;min-width:100%;}
+table.ht th{padding:5px 8px;color:var(--muted);font-weight:500;white-space:nowrap;position:sticky;top:0;background:var(--surface);z-index:5;text-align:center;}
+table.ht th.dn-th{text-align:left;left:0;z-index:6;min-width:180px;border-right:1px solid var(--border);}
+table.ht td{padding:0;border-radius:5px;cursor:pointer;transition:transform .1s;}
+table.ht td:hover{transform:scale(1.08);z-index:5;position:relative;}
+table.ht td.dn-td{padding:5px 8px;border-radius:5px;cursor:default;position:sticky;left:0;background:var(--surface);border-right:1px solid var(--border);z-index:4;white-space:nowrap;font-size:11px;}
+table.ht td.dn-td:hover{transform:none;}
+table.ht tr:hover td.dn-td{color:var(--accent);}
+.ht-cell{width:80px;height:34px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;border-radius:5px;color:rgba(255,255,255,0.9);}
+.ht-zero{background:var(--surface2);color:var(--border);}
+td.z-dim{opacity:.15;}
+td.z-hl{outline:2px solid var(--accent);}
+
+/* ── TOOLTIP ── */
+#tt{position:fixed;z-index:1000;pointer-events:none;background:#1a2234;border:1px solid #1e2d47;border-radius:10px;padding:10px 14px;font-family:'DM Mono',monospace;font-size:11px;color:#e2e8f0;display:none;max-width:230px;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+#tt .tt-title{font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:4px;}
+#tt .tt-row{display:flex;justify-content:space-between;gap:14px;color:#94a3b8;margin-top:2px;}
+#tt .tt-val{color:#e2e8f0;}
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.card:nth-child(1){animation-delay:.04s} .card:nth-child(2){animation-delay:.08s}
+.card:nth-child(3){animation-delay:.12s} .card:nth-child(4){animation-delay:.16s}
+
+footer{text-align:center;padding:20px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);border-top:1px solid var(--border);margin-top:24px;}
+
+/* ── RESPIRATORY / OTHER SECTION DIVIDERS ── */
+.resp-block{background:rgba(79,156,249,0.04);border:1px solid rgba(79,156,249,0.18);border-radius:12px;padding:16px 18px;margin-bottom:12px;}
+.other-block{background:rgba(249,115,22,0.03);border:1px solid rgba(249,115,22,0.14);border-radius:12px;padding:16px 18px;margin-bottom:12px;}
+
+.group-label{display:inline-flex;align-items:center;gap:7px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;padding:4px 10px;border-radius:20px;margin-bottom:12px;}
+.group-label.resp {background:rgba(79,156,249,0.12);color:#4f9cf9;border:1px solid rgba(79,156,249,0.25);}
+.group-label.other{background:rgba(249,115,22,0.10);color:#f97316;border:1px solid rgba(249,115,22,0.22);}
+
+/* split disease list */
+.dis-list-divider{display:flex;align-items:center;gap:8px;margin:8px 0 4px;font-family:'DM Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
+.dis-list-divider::before,.dis-list-divider::after{content:'';flex:1;height:1px;}
+.dis-list-divider.resp-div::before,.dis-list-divider.resp-div::after{background:rgba(79,156,249,0.25);}
+.dis-list-divider.resp-div{color:#4f9cf9;}
+.dis-list-divider.other-div::before,.dis-list-divider.other-div::after{background:rgba(249,115,22,0.2);}
+.dis-list-divider.other-div{color:#f97316;}
+
+/* dis-row tint for respiratory */
+.dis-row.is-resp{background:rgba(79,156,249,0.04);border-radius:6px;padding-left:4px;padding-right:4px;}
+
+/* seasonal page: split monthly bar */
+.sea-group-header{display:flex;align-items:center;gap:10px;padding:8px 0 4px;font-family:'DM Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.1em;}
+.sea-group-header.resp {color:#4f9cf9;}
+.sea-group-header.other{color:#f97316;}
+.sea-group-header::after{content:'';flex:1;height:1px;}
+.sea-group-header.resp::after {background:rgba(79,156,249,0.2);}
+.sea-group-header.other::after{background:rgba(249,115,22,0.15);}
+table.sea tr.is-resp td.dis-td{color:#4f9cf9;}
+table.sea tr.is-other td.dis-td{color:#f97316;}
+table.sea tr.is-resp{background:rgba(79,156,249,0.03);}
+
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-brand">
+    <div class="logo">CRD</div>
+    <div class="brand-text">
+      <h1>CalREDIE Surveillance Dashboard</h1>
+      <p>Mono County · Central Region · Confirmed &amp; Initial Reports Only</p>
+    </div>
+  </div>
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="showPage('overview')">📊 Overview</button>
+    <button class="tab-btn" onclick="showPage('seasonal')">📅 Seasonal Trends</button>
+    <button class="tab-btn" onclick="showPage('zipmap')">🗺 ZIP Heatmap</button>
+  </div>
+  <div class="nav-chips">
+    <span class="chip updated">📅 Data through Apr 2025</span>
+    <span class="chip accent">n = 1,166 cases</span>
+    <span class="chip warn">− Non-positive ELRs</span>
+    <span class="chip warn">− IGRAs</span>
+    <span class="chip">Mono County LHJ</span>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════════════════════════
+     PAGE 1 — OVERVIEW
+══════════════════════════════════════════════════ -->
+<div class="page active" id="page-overview">
+
+  <!-- ─── KPI ROW with TREND INDICATORS (NEW) ─── -->
+  <div class="kpi-row" style="margin-top:20px;">
+
+    <div class="kpi">
+      <div class="kpi-label">Total Cases</div>
+      <div class="kpi-value">1,166</div>
+      <div class="kpi-sub">Confirmed / initial reports</div>
+      <div class="kpi-trend">
+        <span class="trend-pill up"><span class="trend-arrow">↑</span> +14%</span>
+        <span class="trend-ctx">vs. prior year</span>
+      </div>
+      <!-- mini sparkline -->
+      <svg class="kpi-spark" width="80" height="36" viewBox="0 0 80 36">
+        <polyline points="0,32 13,28 26,30 39,20 52,14 65,10 80,6" fill="none" stroke="#00d4aa" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-label">Conditions</div>
+      <div class="kpi-value">47</div>
+      <div class="kpi-sub">Unique disease types</div>
+      <div class="kpi-trend">
+        <span class="trend-pill flat"><span class="trend-arrow">→</span> ±0</span>
+        <span class="trend-ctx">no change</span>
+      </div>
+      <svg class="kpi-spark" width="80" height="36" viewBox="0 0 80 36">
+        <polyline points="0,18 16,17 32,19 48,18 64,17 80,18" fill="none" stroke="#4f9cf9" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-label">% Female</div>
+      <div class="kpi-value">51.0%</div>
+      <div class="kpi-sub">595 of 1,166</div>
+      <div class="kpi-trend">
+        <span class="trend-pill down"><span class="trend-arrow">↓</span> −1.2pp</span>
+        <span class="trend-ctx">vs. prior year</span>
+      </div>
+      <svg class="kpi-spark" width="80" height="36" viewBox="0 0 80 36">
+        <polyline points="0,10 16,12 32,11 48,14 64,16 80,18" fill="none" stroke="#f97316" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-label">% Hispanic/Latino</div>
+      <div class="kpi-value">33.9%</div>
+      <div class="kpi-sub">395 of 1,166</div>
+      <div class="kpi-trend">
+        <span class="trend-pill up"><span class="trend-arrow">↑</span> +2.4pp</span>
+        <span class="trend-ctx">vs. prior year</span>
+      </div>
+      <svg class="kpi-spark" width="80" height="36" viewBox="0 0 80 36">
+        <polyline points="0,26 16,24 32,22 48,20 64,18 80,14" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-label">Top Condition</div>
+      <div class="kpi-value" style="font-size:17px;margin-top:4px;">COVID-19</div>
+      <div class="kpi-sub">484 cases · 41.5%</div>
+      <div class="kpi-trend">
+        <span class="trend-pill down"><span class="trend-arrow">↓</span> −8%</span>
+        <span class="trend-ctx">cases vs. prior year</span>
+      </div>
+      <svg class="kpi-spark" width="80" height="36" viewBox="0 0 80 36">
+        <polyline points="0,4 16,6 32,10 48,14 64,20 80,22" fill="none" stroke="#fb7185" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+  </div><!-- end kpi-row -->
+
+  <!-- ─── DISEASES OF CONCERN (NEW) ─── -->
+  <div class="sec">⚠ Diseases of Concern</div>
+  <div class="doc-panel">
+    <div class="doc-header">
+      <div class="doc-title-row">
+        <div class="pulse-dot"></div>
+        <span class="doc-title">Flagged Conditions — Monthly Signal Check</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div class="doc-legend">
+          <div class="doc-leg-item"><div class="leg-dot" style="background:#f87171"></div> Alert: ≥2× 3yr avg</div>
+          <div class="doc-leg-item"><div class="leg-dot" style="background:#fbbf24"></div> Elevated: ≥1.5×</div>
+          <div class="doc-leg-item"><div class="leg-dot" style="background:#4f9cf9"></div> Watch: trending up</div>
+        </div>
+        <span class="doc-meta">Compared to 3-year monthly avg · Apr 2025</span>
+      </div>
+    </div>
+
+    <div class="doc-col-heads">
+      <div></div>
+      <div>Disease</div>
+      <div style="text-align:right">This Month</div>
+      <div style="text-align:right">3yr Avg</div>
+      <div style="text-align:right">Change</div>
+      <div>Status</div>
+    </div>
+
+    <!-- Alert rows — replace values each month from DDP export -->
+    <div class="doc-row">
+      <div class="sev-badge sev-high">!</div>
+      <div class="doc-dis-name">Influenza</div>
+      <div class="doc-num">78</div>
+      <div class="doc-num" style="color:var(--muted)">32</div>
+      <div class="doc-chg chg-up">↑ +144%</div>
+      <div><span class="doc-tag tag-alert">Alert</span></div>
+    </div>
+
+    <div class="doc-row">
+      <div class="sev-badge sev-high">!</div>
+      <div class="doc-dis-name">RSV</div>
+      <div class="doc-num">20</div>
+      <div class="doc-num" style="color:var(--muted)">9</div>
+      <div class="doc-chg chg-up">↑ +122%</div>
+      <div><span class="doc-tag tag-alert">Alert</span></div>
+    </div>
+
+    <div class="doc-row">
+      <div class="sev-badge sev-warn">▲</div>
+      <div class="doc-dis-name">Syphilis</div>
+      <div class="doc-num">2</div>
+      <div class="doc-num" style="color:var(--muted)">1</div>
+      <div class="doc-chg chg-up">↑ +100%</div>
+      <div><span class="doc-tag tag-elevated">Elevated</span></div>
+    </div>
+
+    <div class="doc-row">
+      <div class="sev-badge sev-warn">▲</div>
+      <div class="doc-dis-name">Chlamydia</div>
+      <div class="doc-num">7</div>
+      <div class="doc-num" style="color:var(--muted)">5</div>
+      <div class="doc-chg chg-up">↑ +40%</div>
+      <div><span class="doc-tag tag-elevated">Elevated</span></div>
+    </div>
+
+    <div class="doc-row">
+      <div class="sev-badge sev-watch">~</div>
+      <div class="doc-dis-name">COVID-19</div>
+      <div class="doc-num">15</div>
+      <div class="doc-num" style="color:var(--muted)">18</div>
+      <div class="doc-chg chg-down">↓ −17%</div>
+      <div><span class="doc-tag tag-watch">Watch</span></div>
+    </div>
+
+    <div class="doc-row">
+      <div class="sev-badge sev-ok">·</div>
+      <div class="doc-dis-name">Campylobacteriosis</div>
+      <div class="doc-num">0</div>
+      <div class="doc-num" style="color:var(--muted)">1</div>
+      <div class="doc-chg chg-flat">→ baseline</div>
+      <div><span class="doc-tag tag-baseline">Baseline</span></div>
+    </div>
+
+    <div class="doc-row">
+      <div class="sev-badge sev-ok">·</div>
+      <div class="doc-dis-name">Salmonellosis</div>
+      <div class="doc-num">0</div>
+      <div class="doc-num" style="color:var(--muted)">1</div>
+      <div class="doc-chg chg-flat">→ baseline</div>
+      <div><span class="doc-tag tag-baseline">Baseline</span></div>
+    </div>
+
+    <div class="doc-footnote">
+      Thresholds: Alert ≥ 2× 3-year monthly average · Elevated ≥ 1.5× · Watch = 2+ consecutive months trending up · Baseline = within expected range.
+      Update "This Month" and "3yr Avg" columns from the CalREDIE DDP export each month.
+    </div>
+  </div>
+
+  <!-- ─── PEDIATRIC / ADULT VIEW (NEW) ─── -->
+  <div class="sec">👶 Pediatric vs. Adult Case Breakdown</div>
+  <div class="age-panel mb">
+    <div class="age-panel-header">
+      <span class="age-panel-title">Cases by Age Group — Pediatric vs. Adult View</span>
+      <div class="age-toggle">
+        <button class="age-btn active" onclick="switchAge('ped')">🧒 Pediatric (0–17)</button>
+        <button class="age-btn" onclick="switchAge('adult')">🧑 Adult (18+)</button>
+        <button class="age-btn" onclick="switchAge('compare')">⇄ Compare</button>
+      </div>
+    </div>
+
+    <!-- PEDIATRIC PANEL -->
+    <div class="age-content visible" id="age-ped">
+      <div class="age-stats-bar">
+        <div class="age-stat">
+          <div class="age-stat-val" style="color:#4f9cf9">286</div>
+          <div class="age-stat-label">Pediatric Cases (0–17)</div>
+        </div>
+        <div class="age-stat">
+          <div class="age-stat-val">24.5%</div>
+          <div class="age-stat-label">% of all cases</div>
+        </div>
+        <div class="age-stat">
+          <div class="age-stat-val" style="color:#4f9cf9">129</div>
+          <div class="age-stat-label">Age 0–4</div>
+        </div>
+        <div class="age-stat">
+          <div class="age-stat-val" style="color:#4f9cf9">157</div>
+          <div class="age-stat-label">Age 5–17</div>
+        </div>
+        <div class="age-stat">
+          <div class="age-stat-val">3</div>
+          <div class="age-stat-label">Unique diseases</div>
+        </div>
+      </div>
+      <div class="age-dis-grid">
+        <!-- Top diseases in pediatric population, sorted by count -->
+        <div class="age-dis-card">
+          <div class="adc-name">Influenza</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-ped" style="width:100%"></div></div>
+          <div class="adc-counts"><span class="adc-n">112 cases</span><span>39.2%</span></div>
+        </div>
+        <div class="age-dis-card">
+          <div class="adc-name">COVID-19</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-ped" style="width:85%"></div></div>
+          <div class="adc-counts"><span class="adc-n">96 cases</span><span>33.6%</span></div>
+        </div>
+        <div class="age-dis-card">
+          <div class="adc-name">RSV</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-ped" style="width:56%"></div></div>
+          <div class="adc-counts"><span class="adc-n">64 cases</span><span>22.4%</span></div>
+        </div>
+        <div class="age-dis-card">
+          <div class="adc-name">Chlamydia</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-ped" style="width:3%"></div></div>
+          <div class="adc-counts"><span class="adc-n">1 case</span><span>0.3%</span></div>
+        </div>
+        <div class="age-dis-card">
+          <div class="adc-name">Giardiasis</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-ped" style="width:8%"></div></div>
+          <div class="adc-counts"><span class="adc-n">4 cases</span><span>1.4%</span></div>
+        </div>
+        <div class="age-dis-card">
+          <div class="adc-name">TB (LTBI)</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-ped" style="width:5%"></div></div>
+          <div class="adc-counts"><span class="adc-n">2 cases</span><span>0.7%</span></div>
+        </div>
+        <div class="age-dis-card">
+          <div class="adc-name">Campylobacteriosis</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-ped" style="width:6%"></div></div>
+          <div class="adc-counts"><span class="adc-n">3 cases</span><span>1.0%</span></div>
+        </div>
+        <div class="age-dis-card">
+          <div class="adc-name">Salmonellosis</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-ped" style="width:3%"></div></div>
+          <div class="adc-counts"><span class="adc-n">1 case</span><span>0.3%</span></div>
+        </div>
+      </div>
+      <div class="age-chart-row">
+        <div class="age-chart-cell">
+          <div class="age-chart-title">Pediatric Sex Distribution</div>
+          <div style="height:200px;position:relative;"><canvas id="pedSexChart"></canvas></div>
+        </div>
+        <div class="age-chart-cell">
+          <div class="age-chart-title">Pediatric Ethnicity Distribution</div>
+          <div style="height:200px;position:relative;"><canvas id="pedEthChart"></canvas></div>
+        </div>
+      </div>
+    </div><!-- end age-ped -->
+
+    <!-- ADULT PANEL -->
+    <div class="age-content" id="age-adult">
+      <div class="age-stats-bar">
+        <div class="age-stat">
+          <div class="age-stat-val" style="color:#f97316">880</div>
+          <div class="age-stat-label">Adult Cases (18+)</div>
+        </div>
+        <div class="age-stat">
+          <div class="age-stat-val">75.5%</div>
+          <div class="age-stat-label">% of all cases</div>
+        </div>
+        <div class="age-stat">
+          <div class="age-stat-val" style="color:#f97316">218</div>
+          <div class="age-stat-label">Age 18–29</div>
+        </div>
+        <div class="age-stat">
+          <div class="age-stat-val" style="color:#f97316">484</div>
+          <div class="age-stat-label">Age 30–64</div>
+        </div>
+        <div class="age-stat">
+          <div class="age-stat-val" style="color:#f97316">176</div>
+          <div class="age-stat-label">Age 65+</div>
+        </div>
+      </div>
+      <div class="age-dis-grid">
+        <div class="age-dis-card">
+          <div class="adc-name">COVID-19</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-adult" style="width:100%"></div></div>
+          <div class="adc-counts"><span class="adc-n">388 cases</span><span>44.1%</span></div>
+        </div>
+        <div class="age-dis-card">
+          <div class="adc-name">Influenza</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-adult" style="width:50%"></div></div>
+          <div class="adc-counts"><span class="adc-n">196 cases</span><span>22.3%</span></div>
+        </div>
+        <div class="age-dis-card">
+          <div class="adc-name">RSV</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-adult" style="width:9%"></div></div>
+          <div class="adc-counts"><span class="adc-n">36 cases</span><span>4.1%</span></div>
+        </div>
+        <div class="age-dis-card">
+          <div class="adc-name">Chlamydia</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-adult" style="width:17%"></div></div>
+          <div class="adc-counts"><span class="adc-n">68 cases</span><span>7.7%</span></div>
+        </div>
+        <div class="age-dis-card">
+          <div class="adc-name">TB (LTBI)</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-adult" style="width:7%"></div></div>
+          <div class="adc-counts"><span class="adc-n">27 cases</span><span>3.1%</span></div>
+        </div>
+        <div class="age-dis-card">
+          <div class="adc-name">Syphilis</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-adult" style="width:2%"></div></div>
+          <div class="adc-counts"><span class="adc-n">9 cases</span><span>1.0%</span></div>
+        </div>
+        <div class="age-dis-card">
+          <div class="adc-name">Giardiasis</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-adult" style="width:2%"></div></div>
+          <div class="adc-counts"><span class="adc-n">8 cases</span><span>0.9%</span></div>
+        </div>
+        <div class="age-dis-card">
+          <div class="adc-name">Campylobacteriosis</div>
+          <div class="adc-bar-track"><div class="adc-bar-fill bar-adult" style="width:2%"></div></div>
+          <div class="adc-counts"><span class="adc-n">7 cases</span><span>0.8%</span></div>
+        </div>
+      </div>
+      <div class="age-chart-row">
+        <div class="age-chart-cell">
+          <div class="age-chart-title">Adult Sex Distribution</div>
+          <div style="height:200px;position:relative;"><canvas id="adultSexChart"></canvas></div>
+        </div>
+        <div class="age-chart-cell">
+          <div class="age-chart-title">Adult Ethnicity Distribution</div>
+          <div style="height:200px;position:relative;"><canvas id="adultEthChart"></canvas></div>
+        </div>
+      </div>
+    </div><!-- end age-adult -->
+
+    <!-- COMPARE PANEL -->
+    <div class="age-content" id="age-compare">
+      <div class="age-stats-bar">
+        <div class="age-stat">
+          <div style="display:flex;gap:12px;align-items:baseline;">
+            <span class="age-stat-val" style="color:#4f9cf9">286</span>
+            <span style="color:var(--muted);font-family:'DM Mono',monospace;font-size:12px">vs.</span>
+            <span class="age-stat-val" style="color:#f97316">880</span>
+          </div>
+          <div class="age-stat-label">Pediatric vs. Adult cases</div>
+        </div>
+        <div class="age-stat">
+          <div style="display:flex;gap:12px;align-items:baseline;">
+            <span class="age-stat-val" style="color:#4f9cf9">24.5%</span>
+            <span style="color:var(--muted);font-family:'DM Mono',monospace;font-size:12px">vs.</span>
+            <span class="age-stat-val" style="color:#f97316">75.5%</span>
+          </div>
+          <div class="age-stat-label">Share of total caseload</div>
+        </div>
+        <div class="age-stat">
+          <div class="age-stat-val" style="color:#00d4aa">Influenza</div>
+          <div class="age-stat-label">Top pediatric condition</div>
+        </div>
+        <div class="age-stat">
+          <div class="age-stat-val" style="color:#00d4aa">COVID-19</div>
+          <div class="age-stat-label">Top adult condition</div>
+        </div>
+      </div>
+      <div style="padding:18px 20px;">
+        <div class="age-chart-title" style="margin-bottom:14px;">Disease Burden: Pediatric vs. Adult (top 6 shared conditions)</div>
+        <div style="height:300px;position:relative;"><canvas id="compareChart"></canvas></div>
+      </div>
+      <div style="padding:0 20px 18px;">
+        <div class="age-chart-title" style="margin-bottom:10px;">Key Differences</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div style="background:rgba(79,156,249,0.07);border:1px solid rgba(79,156,249,0.2);border-radius:8px;padding:12px 14px;">
+            <div style="font-family:'DM Mono',monospace;font-size:10px;color:#4f9cf9;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">🧒 Pediatric Only / Dominant</div>
+            <div style="font-size:11px;color:var(--text);line-height:1.7;">RSV heavily concentrated in 0–4 age group (44 of 64 cases). Influenza is #1 burden — higher rate than adults. No STI cases in under-5s.</div>
+          </div>
+          <div style="background:rgba(249,115,22,0.07);border:1px solid rgba(249,115,22,0.2);border-radius:8px;padding:12px 14px;">
+            <div style="font-family:'DM Mono',monospace;font-size:10px;color:#f97316;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">🧑 Adult Only / Dominant</div>
+            <div style="font-size:11px;color:var(--text);line-height:1.7;">STIs (Chlamydia, Syphilis) almost exclusively adult. TB (LTBI) predominantly 30–64. COVID-19 peaks in 30–64 group.</div>
+          </div>
+        </div>
+      </div>
+    </div><!-- end age-compare -->
+
+    <div class="age-note">
+      Pediatric = ages 0–17 · Adult = ages 18+ · Data derived from CalREDIE DDP age group fields · DtEpisode 2022–2025
+    </div>
+  </div>
+
+  <!-- ─── ORIGINAL OVERVIEW SECTIONS ─── -->
+  <div class="sec">Disease Burden &amp; Demographics</div>
+  <div class="g3 mb">
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Top Disease Conditions</div><div class="card-sub">Ranked by case count</div></div><span class="badge">n=1,166</span></div>
+      <div class="dis-list" id="diseaseList"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Sex Distribution</div><div class="card-sub">All conditions</div></div></div>
+      <div class="h260"><canvas id="sexPie"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Ethnicity</div><div class="card-sub">Hispanic vs. Non-Hispanic</div></div></div>
+      <div class="h260"><canvas id="ethPie"></canvas></div>
+    </div>
+  </div>
+
+  <div class="sec">Age &amp; Race</div>
+  <div class="g2 mb">
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Age Group Distribution</div><div class="card-sub">Cases by age bracket</div></div><span class="badge">All conditions</span></div>
+      <div class="h300"><canvas id="ageBar"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Race Distribution</div><div class="card-sub">Self-reported racial category</div></div></div>
+      <div class="h300"><canvas id="raceDonut"></canvas></div>
+    </div>
+  </div>
+
+  <div class="sec">Sex × Disease</div>
+  <div class="g2 mb">
+    <div class="card resp-block" style="padding:0;overflow:hidden;">
+      <div style="padding:14px 16px 0;">
+        <span class="group-label resp">🫁 Respiratory Viruses</span>
+        <div class="card-title" style="font-size:12px;margin-bottom:2px;">Sex by Respiratory Disease</div>
+        <div class="card-sub">COVID-19 · Influenza · RSV — Male vs. Female</div>
+      </div>
+      <div class="h300" style="padding:10px 8px 14px;"><canvas id="disSexBarResp"></canvas></div>
+    </div>
+    <div class="card other-block" style="padding:0;overflow:hidden;">
+      <div style="padding:14px 16px 0;">
+        <span class="group-label other">🦠 Other Conditions</span>
+        <div class="card-title" style="font-size:12px;margin-bottom:2px;">Sex by Other Disease</div>
+        <div class="card-sub">Chlamydia · TB · Giardiasis + more — Male vs. Female</div>
+      </div>
+      <div class="h300" style="padding:10px 8px 14px;"><canvas id="disSexBarOther"></canvas></div>
+    </div>
+  </div>
+
+  <div class="sec">Age &amp; Ethnicity Stratification</div>
+  <div class="g2 mb">
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Age Groups by Disease</div><div class="card-sub">Stacked — top 6 conditions</div></div><span class="badge">Stacked</span></div>
+      <div class="h380"><canvas id="ageDisStacked"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Ethnicity by Disease</div><div class="card-sub">Hispanic vs. Non-Hispanic — top 5</div></div><span class="badge">Horizontal</span></div>
+      <div class="h380"><canvas id="ethDisBar"></canvas></div>
+    </div>
+  </div>
+
+  <div class="sec">Disease Composition</div>
+  <div class="g2 mb">
+    <div class="card resp-block" style="padding:0;overflow:hidden;">
+      <div style="padding:14px 16px 8px;">
+        <span class="group-label resp">🫁 Respiratory</span>
+        <div class="card-title" style="font-size:12px;">Respiratory Virus Breakdown</div>
+        <div class="card-sub">COVID-19 · Influenza · RSV share of respiratory cases</div>
+      </div>
+      <div class="h280" style="padding:0 8px 14px;"><canvas id="disDonutResp"></canvas></div>
+    </div>
+    <div class="card other-block" style="padding:0;overflow:hidden;">
+      <div style="padding:14px 16px 8px;">
+        <span class="group-label other">🦠 Other Conditions</span>
+        <div class="card-title" style="font-size:12px;">Non-Respiratory Disease Breakdown</div>
+        <div class="card-sub">All non-respiratory reportable conditions</div>
+      </div>
+      <div class="h280" style="padding:0 8px 14px;"><canvas id="disDonutOther"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     PAGE 2 — SEASONAL TRENDS
+══════════════════════════════════════════════════ -->
+<div class="page" id="page-seasonal">
+  <div style="margin-top:20px;">
+
+    <div class="sec">Monthly Case Volume</div>
+    <div class="g2 mb">
+      <div class="card resp-block" style="padding:0;overflow:hidden;">
+        <div style="padding:14px 16px 8px;">
+          <span class="group-label resp">🫁 Respiratory Viruses</span>
+          <div class="card-title" style="font-size:12px;">COVID-19 · Influenza · RSV by Month</div>
+          <div class="card-sub">Combined across all years · DtEpisode 2022–2025</div>
+        </div>
+        <div class="h220" style="padding:0 8px 14px;"><canvas id="respMonthBar"></canvas></div>
+      </div>
+      <div class="card other-block" style="padding:0;overflow:hidden;">
+        <div style="padding:14px 16px 8px;">
+          <span class="group-label other">🦠 Other Conditions</span>
+          <div class="card-title" style="font-size:12px;">Non-Respiratory Cases by Month</div>
+          <div class="card-sub">Combined across all years · DtEpisode 2022–2025</div>
+        </div>
+        <div class="h220" style="padding:0 8px 14px;"><canvas id="otherMonthBar"></canvas></div>
+      </div>
+    </div>
+    <div class="card mb">
+      <div class="card-header">
+        <div><div class="card-title">Total Cases by Month (All Diseases)</div><div class="card-sub">All conditions combined · shown for reference</div></div>
+        <span class="badge">All conditions</span>
+      </div>
+      <div class="h200"><canvas id="allMonthBar"></canvas></div>
+    </div>
+
+    <div class="sec">Disease Time Series</div>
+    <div class="card mb">
+      <div class="card-header">
+        <div><div class="card-title">Cases Over Time by Disease</div><div class="card-sub">Monthly · 2023–2025 · select diseases to compare</div></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <select id="tsSelect" multiple style="height:80px;min-width:180px;">
+            <option value="COVID-19" selected>COVID-19</option>
+            <option value="Influenza" selected>Influenza</option>
+            <option value="RSV" selected>RSV</option>
+            <option value="Chlamydia">Chlamydia</option>
+            <option value="TB (LTBI)">TB (LTBI)</option>
+            <option value="Giardiasis">Giardiasis</option>
+            <option value="Campylobacteriosis">Campylobacteriosis</option>
+            <option value="Salmonellosis">Salmonellosis</option>
+            <option value="Syphilis">Syphilis</option>
+          </select>
+          <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);">Ctrl/Cmd+click<br>to multi-select</span>
+        </div>
+      </div>
+      <div class="h380"><canvas id="timeSeries"></canvas></div>
+    </div>
+
+    <div class="sec">Seasonal Pattern Heatmap</div>
+    <div class="card mb">
+      <div class="card-header">
+        <div><div class="card-title">Disease × Month Heatmap</div><div class="card-sub">Case counts aggregated by month across all years · darker = more cases</div></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">Scale:</label>
+          <select id="seaScale" onchange="buildSeaTable()">
+            <option value="global">Global</option>
+            <option value="row">Per-disease</option>
+            <option value="log">Log</option>
+          </select>
+        </div>
+      </div>
+      <div class="sea-table-wrap"><table class="sea" id="seaTable"></table></div>
+      <div class="scale-bar" style="margin-top:12px;">
+        <span>0</span><div class="scale-grad"></div><span>max</span>
+        <span style="margin-left:8px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">case intensity</span>
+      </div>
+    </div>
+
+    <div class="sec">Seasonal Radar</div>
+    <div class="g2 mb">
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Respiratory Diseases — Monthly Radar</div><div class="card-sub">COVID-19 · Influenza · RSV seasonal shape</div></div></div>
+        <div class="h340"><canvas id="radarResp"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Other Diseases — Monthly Radar</div><div class="card-sub">Chlamydia · Giardiasis · Campylobacteriosis · Salmonellosis</div></div></div>
+        <div class="h340"><canvas id="radarOther"></canvas></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     PAGE 3 — ZIP HEATMAP
+══════════════════════════════════════════════════ -->
+<div class="page" id="page-zipmap">
+  <div style="margin-top:20px;">
+
+    <div class="sec">Geographic Distribution &amp; Disease Breakdown by ZIP</div>
+    <div class="zip-layout">
+
+      <div class="map-card">
+        <div class="card-title">ZIP Code Map</div>
+        <div class="card-sub" style="margin-bottom:12px;">Bubble = total cases · Click to filter</div>
+        <svg id="mapSvg" viewBox="0 0 280 400"></svg>
+        <div class="zip-legend" id="zipLegend"></div>
+        <div class="scale-bar">
+          <span>0</span><div class="scale-grad"></div><span>max</span>
+          <span style="margin-left:6px;font-size:10px;color:var(--muted);">intensity</span>
+        </div>
+      </div>
+
+      <div class="card" style="min-width:0;">
+        <div class="card-header">
+          <div><div class="card-title">Disease × ZIP Heatmap</div><div class="card-sub">Hover for details · Click ZIP or map bubble to filter</div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <input type="search" id="zipSearch" placeholder="Search disease…" oninput="zipSearchChanged()">
+            <select id="zipScale" onchange="buildZipTable()">
+              <option value="global">Global scale</option>
+              <option value="row">Per-disease</option>
+              <option value="log">Log scale</option>
+            </select>
+            <select id="zipShow" onchange="buildZipTable()">
+              <option value="all">All diseases</option>
+              <option value="nonzero">Has cases only</option>
+            </select>
+          </div>
+        </div>
+        <div class="ht-wrap"><table class="ht" id="htTable"></table></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="tt"></div>
+
+<footer>
+  CalREDIE Data Distribution Portal · Mono County LHJ · Central Region · CDPH ·
+  Filters: Non-positive ELRs &amp; IGRA screening results excluded · Confirmed &amp; initial reports only · DtEpisode 2022–2025
+</footer>
+
+<script>
+// ═══════════════════════════════════════════════
+// SHARED DATA
+// ═══════════════════════════════════════════════
+const PAL=['#00d4aa','#4f9cf9','#f97316','#a78bfa','#fb7185','#fbbf24','#34d399','#60a5fa','#f472b6','#c084fc','#38bdf8','#4ade80','#e879f9','#2dd4bf','#f59e0b'];
+const APAL=['#00d4aa','#4f9cf9','#f97316','#a78bfa','#fb7185','#fbbf24','#34d399'];
+const MC='#4f9cf9', FC='#fb7185';
+const ZIP_COLORS=['#00d4aa','#4f9cf9','#f97316','#a78bfa','#fb7185','#fbbf24','#34d399'];
+
+const TT_OPT={backgroundColor:'#1a2234',borderColor:'#1e2d47',borderWidth:1,titleColor:'#e2e8f0',bodyColor:'#94a3b8',titleFont:{family:"'Syne',sans-serif",size:12},bodyFont:{family:"'DM Mono',monospace",size:11},padding:10,cornerRadius:8};
+const LEG={labels:{color:'#94a3b8',font:{family:"'DM Mono',monospace",size:10},boxWidth:9,boxHeight:9,padding:12}};
+const SC={x:{ticks:{color:'#64748b',font:{family:"'DM Mono',monospace",size:10}},grid:{color:'rgba(255,255,255,0.04)'},border:{color:'#1e2d47'}},y:{ticks:{color:'#64748b',font:{family:"'DM Mono',monospace",size:10}},grid:{color:'rgba(255,255,255,0.04)'},border:{color:'#1e2d47'}}};
+
+// ─── Overview data ───
+const TOP_DIS=[{d:"COVID-19",n:484},{d:"Influenza",n:308},{d:"RSV",n:100},{d:"Chlamydia",n:69},{d:"TB (LTBI)",n:29},{d:"Giardiasis",n:12},{d:"Campylobacteriosis",n:10},{d:"Salmonellosis",n:10},{d:"COVID-19 Serology",n:9},{d:"DMV Reportable",n:9},{d:"Syphilis",n:9},{d:"Hepatitis B",n:8},{d:"TB (No Exposure)",n:8},{d:"Unknown",n:6}];
+const SEX=[{s:"Male",n:568},{s:"Female",n:595},{s:"Unknown",n:2},{s:"Non-binary",n:1}];
+const ETH=[{e:"Not Hispanic/Latino",n:601},{e:"Hispanic/Latino",n:395},{e:"Unknown",n:169}];
+const RACE=[{r:"White",n:755},{r:"Unknown",n:265},{r:"Other",n:89},{r:"AIAN",n:29},{r:"Asian",n:13},{r:"NHPI",n:8},{r:"Black/African Am.",n:6}];
+const AGE_D=[{g:"0–4",n:129},{g:"5–17",n:157},{g:"18–29",n:218},{g:"30–44",n:237},{g:"45–64",n:247},{g:"65–79",n:150},{g:"80+",n:26}];
+const DIS_SEX=[{d:"COVID-19",M:217,F:266},{d:"Influenza",M:155,F:153},{d:"RSV",M:48,F:52},{d:"Chlamydia",M:28,F:40},{d:"TB (LTBI)",M:15,F:14},{d:"Giardiasis",M:10,F:2},{d:"Campylobacteriosis",M:3,F:7},{d:"Salmonellosis",M:4,F:6}];
+const AGG=["0–4","5–17","18–29","30–44","45–64","65–79","80+"];
+const DIS_AGE=[
+  {d:"COVID-19",   v:[50,46,57,96,116,98,19]},
+  {d:"Influenza",  v:[33,79,70,61,46,16,3]},
+  {d:"RSV",        v:[44,20,5,11,9,9,2]},
+  {d:"Chlamydia",  v:[0,1,48,17,3,0,0]},
+  {d:"TB (LTBI)",  v:[0,2,2,6,17,1,1]},
+  {d:"Salmonellosis",v:[0,0,1,3,3,2,1]}
+];
+const ETH_DIS=[{d:"COVID-19",HL:143,NH:285},{d:"Influenza",HL:117,NH:138},{d:"RSV",HL:38,NH:54},{d:"Chlamydia",HL:30,NH:21},{d:"TB (LTBI)",HL:13,NH:14}];
+
+// ─── Pediatric/Adult breakdown data ───
+const PED_SEX=[{s:"Male",n:141},{s:"Female",n:143},{s:"Unknown",n:2}];
+const PED_ETH=[{e:"Hispanic/Latino",n:118},{e:"Not Hispanic/Latino",n:138},{e:"Unknown",n:30}];
+const ADULT_SEX=[{s:"Male",n:427},{s:"Female",n:452},{s:"Unknown",n:1}];
+const ADULT_ETH=[{e:"Not Hispanic/Latino",n:463},{e:"Hispanic/Latino",n:277},{e:"Unknown",n:140}];
+const COMPARE_DIS=["COVID-19","Influenza","RSV","Chlamydia","TB (LTBI)","Giardiasis"];
+const PED_COUNTS=  [96, 112, 64, 1,  2, 4];
+const ADULT_COUNTS=[388,196, 36, 68, 27, 8];
+
+// ─── Seasonal data ───
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const ALL_MONTH=[304,97,48,40,32,69,59,101,106,74,70,165];
+const SEA_DATA={
+  "COVID-19":       [89,30,19,10,9,28,37,73,78,41,28,42],
+  "Influenza":      [136,34,12,14,4,5,1,0,4,2,10,86],
+  "RSV":            [54,9,4,1,0,1,0,0,1,2,5,23],
+  "Chlamydia":      [5,6,6,4,5,7,4,5,6,13,4,4],
+  "TB (LTBI)":      [1,1,2,4,2,5,2,5,0,2,5,0],
+  "Giardiasis":     [0,4,0,1,0,4,1,0,1,1,0,0],
+  "Campylobacteriosis":[0,2,0,0,0,3,4,0,0,0,1,0],
+  "Salmonellosis":  [0,1,0,0,2,0,0,3,1,1,2,0],
+  "COVID-19 Serology":[3,2,0,1,0,1,1,0,0,0,1,0],
+  "DMV Reportable": [4,0,0,0,1,0,0,0,0,1,1,2],
+  "Syphilis":       [2,0,0,1,1,0,3,0,1,0,1,0],
+  "Hepatitis B":    [1,0,1,0,1,0,0,2,1,0,2,0],
+  "TB (No Exposure)":[0,1,0,0,0,2,1,1,1,1,1,0],
+  "Unknown":        [2,1,0,0,0,0,0,0,2,1,0,0]
+};
+
+const TS_ENTRIES=[
+  {yr:2022,mo:2,d:"COVID-19",n:1},{yr:2022,mo:6,d:"COVID-19",n:1},{yr:2022,mo:11,d:"COVID-19",n:1},
+  {yr:2023,mo:1,d:"COVID-19",n:38},{yr:2023,mo:2,d:"COVID-19",n:15},{yr:2023,mo:3,d:"COVID-19",n:17},{yr:2023,mo:4,d:"COVID-19",n:7},{yr:2023,mo:5,d:"COVID-19",n:5},{yr:2023,mo:6,d:"COVID-19",n:16},{yr:2023,mo:7,d:"COVID-19",n:13},{yr:2023,mo:8,d:"COVID-19",n:42},{yr:2023,mo:9,d:"COVID-19",n:49},{yr:2023,mo:10,d:"COVID-19",n:30},{yr:2023,mo:11,d:"COVID-19",n:23},{yr:2023,mo:12,d:"COVID-19",n:30},
+  {yr:2024,mo:1,d:"COVID-19",n:36},{yr:2024,mo:2,d:"COVID-19",n:14},{yr:2024,mo:3,d:"COVID-19",n:2},{yr:2024,mo:4,d:"COVID-19",n:3},{yr:2024,mo:5,d:"COVID-19",n:4},{yr:2024,mo:6,d:"COVID-19",n:11},{yr:2024,mo:7,d:"COVID-19",n:24},{yr:2024,mo:8,d:"COVID-19",n:31},{yr:2024,mo:9,d:"COVID-19",n:29},{yr:2024,mo:10,d:"COVID-19",n:11},{yr:2024,mo:11,d:"COVID-19",n:4},{yr:2024,mo:12,d:"COVID-19",n:12},
+  {yr:2025,mo:1,d:"COVID-19",n:15},
+  {yr:2023,mo:1,d:"Influenza",n:1},{yr:2023,mo:2,d:"Influenza",n:2},{yr:2023,mo:9,d:"Influenza",n:2},{yr:2023,mo:11,d:"Influenza",n:9},{yr:2023,mo:12,d:"Influenza",n:36},
+  {yr:2024,mo:1,d:"Influenza",n:57},{yr:2024,mo:2,d:"Influenza",n:32},{yr:2024,mo:3,d:"Influenza",n:12},{yr:2024,mo:4,d:"Influenza",n:14},{yr:2024,mo:5,d:"Influenza",n:4},{yr:2024,mo:6,d:"Influenza",n:5},{yr:2024,mo:7,d:"Influenza",n:1},{yr:2024,mo:9,d:"Influenza",n:2},{yr:2024,mo:10,d:"Influenza",n:2},{yr:2024,mo:11,d:"Influenza",n:1},{yr:2024,mo:12,d:"Influenza",n:50},
+  {yr:2025,mo:1,d:"Influenza",n:78},
+  {yr:2023,mo:1,d:"RSV",n:1},{yr:2023,mo:9,d:"RSV",n:1},{yr:2023,mo:11,d:"RSV",n:5},{yr:2023,mo:12,d:"RSV",n:18},
+  {yr:2024,mo:1,d:"RSV",n:33},{yr:2024,mo:2,d:"RSV",n:9},{yr:2024,mo:3,d:"RSV",n:4},{yr:2024,mo:4,d:"RSV",n:1},{yr:2024,mo:6,d:"RSV",n:1},{yr:2024,mo:10,d:"RSV",n:2},{yr:2024,mo:12,d:"RSV",n:5},
+  {yr:2025,mo:1,d:"RSV",n:20},
+  {yr:2023,mo:1,d:"Chlamydia",n:2},{yr:2023,mo:2,d:"Chlamydia",n:3},{yr:2023,mo:3,d:"Chlamydia",n:2},{yr:2023,mo:4,d:"Chlamydia",n:2},{yr:2023,mo:5,d:"Chlamydia",n:1},{yr:2023,mo:6,d:"Chlamydia",n:5},{yr:2023,mo:7,d:"Chlamydia",n:1},{yr:2023,mo:8,d:"Chlamydia",n:2},{yr:2023,mo:9,d:"Chlamydia",n:3},{yr:2023,mo:10,d:"Chlamydia",n:6},{yr:2023,mo:11,d:"Chlamydia",n:4},{yr:2023,mo:12,d:"Chlamydia",n:2},
+  {yr:2024,mo:1,d:"Chlamydia",n:2},{yr:2024,mo:2,d:"Chlamydia",n:3},{yr:2024,mo:3,d:"Chlamydia",n:4},{yr:2024,mo:4,d:"Chlamydia",n:2},{yr:2024,mo:5,d:"Chlamydia",n:4},{yr:2024,mo:6,d:"Chlamydia",n:2},{yr:2024,mo:7,d:"Chlamydia",n:3},{yr:2024,mo:8,d:"Chlamydia",n:3},{yr:2024,mo:9,d:"Chlamydia",n:3},{yr:2024,mo:10,d:"Chlamydia",n:7},{yr:2024,mo:12,d:"Chlamydia",n:2},
+  {yr:2025,mo:1,d:"Chlamydia",n:1},
+  {yr:2023,mo:2,d:"TB (LTBI)",n:1},{yr:2023,mo:3,d:"TB (LTBI)",n:2},{yr:2023,mo:4,d:"TB (LTBI)",n:3},{yr:2023,mo:5,d:"TB (LTBI)",n:2},{yr:2023,mo:6,d:"TB (LTBI)",n:5},{yr:2023,mo:7,d:"TB (LTBI)",n:2},{yr:2023,mo:8,d:"TB (LTBI)",n:5},{yr:2023,mo:10,d:"TB (LTBI)",n:2},{yr:2023,mo:11,d:"TB (LTBI)",n:5},
+  {yr:2024,mo:4,d:"TB (LTBI)",n:1},{yr:2025,mo:1,d:"TB (LTBI)",n:1},
+  {yr:2023,mo:2,d:"Giardiasis",n:4},{yr:2023,mo:4,d:"Giardiasis",n:1},{yr:2023,mo:6,d:"Giardiasis",n:4},{yr:2023,mo:9,d:"Giardiasis",n:1},{yr:2024,mo:7,d:"Giardiasis",n:1},{yr:2024,mo:10,d:"Giardiasis",n:1},
+  {yr:2023,mo:2,d:"Campylobacteriosis",n:1},{yr:2023,mo:6,d:"Campylobacteriosis",n:1},{yr:2023,mo:7,d:"Campylobacteriosis",n:3},{yr:2024,mo:2,d:"Campylobacteriosis",n:1},{yr:2024,mo:6,d:"Campylobacteriosis",n:2},{yr:2024,mo:7,d:"Campylobacteriosis",n:1},{yr:2024,mo:11,d:"Campylobacteriosis",n:1},
+  {yr:2023,mo:5,d:"Salmonellosis",n:2},{yr:2023,mo:8,d:"Salmonellosis",n:3},{yr:2023,mo:9,d:"Salmonellosis",n:1},{yr:2023,mo:10,d:"Salmonellosis",n:1},{yr:2024,mo:2,d:"Salmonellosis",n:1},{yr:2024,mo:11,d:"Salmonellosis",n:2},
+  {yr:2024,mo:4,d:"Syphilis",n:1},{yr:2024,mo:5,d:"Syphilis",n:1},{yr:2024,mo:7,d:"Syphilis",n:3},{yr:2024,mo:11,d:"Syphilis",n:1},{yr:2025,mo:1,d:"Syphilis",n:2}
+];
+
+// ─── ZIP data ───
+const ZIPS=[
+  {zip:"93546",total:773,lat:37.648975,lon:-118.970879,town:"Mammoth Lakes"},
+  {zip:"93514",total:128,lat:37.512489,lon:-118.637435,town:"Bishop"},
+  {zip:"93541",total:35, lat:37.9555,  lon:-119.120015,town:"Lee Vining"},
+  {zip:"93529",total:30, lat:37.777889,lon:-119.075745,town:"June Lake"},
+  {zip:"93517",total:25, lat:38.256577,lon:-119.227303,town:"Bridgeport"},
+  {zip:"93512",total:23, lat:37.792573,lon:-118.524648,town:"Benton"},
+  {zip:"96107",total:12, lat:38.52273, lon:-119.454156,town:"Coleville"},
+];
+const ZIP_DISEASES=["Brucellosis","COVID-19","COVID-19 Serology","Campylobacteriosis","Chlamydia","Coccidioidomycosis","Creutzfeldt-Jakob","Cryptosporidiosis","Cyclosporiasis","DMV Reportable","Dengue","Giardiasis","Gonorrhea","HIV Field Invest.","HIV/AIDS","H. influenzae","Hepatitis A","Hepatitis B","Influenza","CRO (Local)","Meningitis (Bacterial)","Meningitis (Viral)","MIS-C","Pertussis","Q Fever","RSV","Relapsing Fever","STEC/E. coli","Salmonellosis","Shigellosis","Syphilis","Syphilis (Primary)","Syphilis (Secondary)","Syphilis (Unk. Duration)","TB (LTBI)","TB (No Exposure)","TB (Active)","TB (Exposure)","TB (Suspect)","Tularemia","Unknown","Varicella","Viral Hem. Fevers","West Nile","Yersiniosis"];
+const ZIP_MATRIX={
+  "93546":[1,286,7,7,51,2,0,6,1,6,1,9,3,0,2,0,1,6,208,0,1,1,1,2,1,78,2,4,10,2,9,1,0,1,23,4,1,5,2,1,5,2,2,1,1],
+  "93514":[0,89,2,0,4,0,0,0,0,0,0,0,1,0,0,0,0,0,21,1,0,0,0,0,1,5,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0],
+  "93541":[0,15,0,0,2,0,0,0,0,0,0,1,0,1,1,1,0,0,6,0,0,0,0,0,0,3,1,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0],
+  "93529":[1,16,0,0,0,0,0,0,0,0,0,0,1,0,1,0,1,0,6,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0],
+  "93517":[0,10,0,0,3,0,1,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,2,0,0,1,0,0,0,0,0,0,0],
+  "93512":[0,12,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,4,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  "96107":[0,2,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,3,0,0,0,0,0,0,0,0,0],
+};
+
+// ═══════════════════════════════════════════════
+// PAGE NAV
+// ═══════════════════════════════════════════════
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  document.querySelector(`[onclick="showPage('${id}')"]`).classList.add('active');
+  if(id==='seasonal' && !seaBuilt) { buildSeasonalCharts(); seaBuilt=true; }
+  if(id==='zipmap'  && !zipBuilt)  { buildZipPage();       zipBuilt=true; }
+}
+let seaBuilt=false, zipBuilt=false;
+
+// ═══════════════════════════════════════════════
+// PEDIATRIC / ADULT TOGGLE (NEW)
+// ═══════════════════════════════════════════════
+let ageChartsBuilt = false;
+
+function switchAge(mode) {
+  // update buttons
+  document.querySelectorAll('.age-btn').forEach(b=>b.classList.remove('active'));
+  const idx = {ped:0,adult:1,compare:2}[mode];
+  document.querySelectorAll('.age-btn')[idx].classList.add('active');
+  // show/hide panels
+  document.querySelectorAll('.age-content').forEach(c=>c.classList.remove('visible'));
+  document.getElementById('age-'+mode).classList.add('visible');
+  // build charts once
+  if(!ageChartsBuilt){ buildAgeCharts(); ageChartsBuilt=true; }
+}
+
+function buildAgeCharts(){
+  const pie_opts = {responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{family:"'DM Mono',monospace",size:10},boxWidth:7,boxHeight:7,padding:7}},tooltip:TT_OPT}};
+
+  new Chart(document.getElementById('pedSexChart'),{type:'doughnut',data:{
+    labels:PED_SEX.map(d=>d.s),
+    datasets:[{data:PED_SEX.map(d=>d.n),backgroundColor:[MC,FC,'#475569'],borderWidth:0,hoverOffset:6}]
+  },options:pie_opts});
+
+  new Chart(document.getElementById('pedEthChart'),{type:'doughnut',data:{
+    labels:PED_ETH.map(d=>d.e),
+    datasets:[{data:PED_ETH.map(d=>d.n),backgroundColor:['#00d4aa','#4f9cf9','#475569'],borderWidth:0,hoverOffset:6}]
+  },options:pie_opts});
+
+  new Chart(document.getElementById('adultSexChart'),{type:'doughnut',data:{
+    labels:ADULT_SEX.map(d=>d.s),
+    datasets:[{data:ADULT_SEX.map(d=>d.n),backgroundColor:[MC,FC,'#475569'],borderWidth:0,hoverOffset:6}]
+  },options:pie_opts});
+
+  new Chart(document.getElementById('adultEthChart'),{type:'doughnut',data:{
+    labels:ADULT_ETH.map(d=>d.e),
+    datasets:[{data:ADULT_ETH.map(d=>d.n),backgroundColor:['#4f9cf9','#00d4aa','#475569'],borderWidth:0,hoverOffset:6}]
+  },options:pie_opts});
+
+  new Chart(document.getElementById('compareChart'),{type:'bar',data:{
+    labels:COMPARE_DIS,
+    datasets:[
+      {label:'Pediatric (0–17)',data:PED_COUNTS,  backgroundColor:'rgba(79,156,249,0.7)',borderRadius:4,borderSkipped:false},
+      {label:'Adult (18+)',     data:ADULT_COUNTS,backgroundColor:'rgba(249,115,22,0.7)',borderRadius:4,borderSkipped:false}
+    ]
+  },options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:LEG,tooltip:{...TT_OPT,mode:'index',intersect:false}},
+    scales:{x:{...SC.x,stacked:false},y:{...SC.y,beginAtZero:true}}
+  }});
+}
+
+// ═══════════════════════════════════════════════
+// OVERVIEW CHARTS
+// ═══════════════════════════════════════════════
+const RESP_SET=new Set(["COVID-19","Influenza","RSV","COVID-19 Serology"]);
+const dlEl=document.getElementById('diseaseList');
+const mx=TOP_DIS[0].n;
+const respDis=TOP_DIS.filter(d=>RESP_SET.has(d.d));
+const otherDis=TOP_DIS.filter(d=>!RESP_SET.has(d.d));
+
+dlEl.innerHTML+=`<div class="dis-list-divider resp-div">🫁 Respiratory Viruses</div>`;
+respDis.forEach((d,i)=>{
+  dlEl.innerHTML+=`<div class="dis-row is-resp">
+    <span class="dis-rank" style="color:#4f9cf9">${i+1}</span>
+    <span class="dis-name">${d.d}</span>
+    <div class="dis-bar-wrap"><div class="dis-bar" style="width:${(d.n/mx*100).toFixed(0)}%;background:#4f9cf9"></div></div>
+    <span class="dis-count">${d.n}</span>
+  </div>`;
+});
+dlEl.innerHTML+=`<div class="dis-list-divider other-div" style="margin-top:8px;">🦠 Other Conditions</div>`;
+otherDis.forEach((d,i)=>{
+  dlEl.innerHTML+=`<div class="dis-row">
+    <span class="dis-rank">${i+1}</span>
+    <span class="dis-name">${d.d}</span>
+    <div class="dis-bar-wrap"><div class="dis-bar" style="width:${(d.n/mx*100).toFixed(0)}%;background:${PAL[(i+4)%PAL.length]}"></div></div>
+    <span class="dis-count">${d.n}</span>
+  </div>`;
+});
+
+new Chart(document.getElementById('sexPie'),{type:'doughnut',data:{labels:SEX.map(d=>d.s),datasets:[{data:SEX.map(d=>d.n),backgroundColor:[MC,FC,'#475569','#a78bfa'],borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:LEG,tooltip:TT_OPT}}});
+new Chart(document.getElementById('ethPie'),{type:'doughnut',data:{labels:ETH.map(d=>d.e),datasets:[{data:ETH.map(d=>d.n),backgroundColor:['#4f9cf9','#00d4aa','#475569'],borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:LEG,tooltip:TT_OPT}}});
+new Chart(document.getElementById('ageBar'),{type:'bar',data:{labels:AGE_D.map(d=>d.g),datasets:[{label:'Cases',data:AGE_D.map(d=>d.n),backgroundColor:APAL,borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:TT_OPT},scales:SC}});
+new Chart(document.getElementById('raceDonut'),{type:'doughnut',data:{labels:RACE.map(d=>d.r),datasets:[{data:RACE.map(d=>d.n),backgroundColor:PAL,borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{family:"'DM Mono',monospace",size:10},boxWidth:7,boxHeight:7,padding:7}},tooltip:TT_OPT}}});
+
+// Sex × Disease — SPLIT: respiratory vs other
+const DIS_SEX_RESP=[{d:"COVID-19",M:217,F:266},{d:"Influenza",M:155,F:153},{d:"RSV",M:48,F:52}];
+const DIS_SEX_OTHER=[{d:"Chlamydia",M:28,F:40},{d:"TB (LTBI)",M:15,F:14},{d:"Giardiasis",M:10,F:2},{d:"Campylobacteriosis",M:3,F:7},{d:"Salmonellosis",M:4,F:6}];
+const RESP_MALE='#4f9cf9', RESP_FEM='#38bdf8';
+const OTH_MALE='#f97316',  OTH_FEM='#fb7185';
+new Chart(document.getElementById('disSexBarResp'),{type:'bar',data:{labels:DIS_SEX_RESP.map(d=>d.d),datasets:[{label:'Male',data:DIS_SEX_RESP.map(d=>d.M),backgroundColor:RESP_MALE,borderRadius:4,borderSkipped:false},{label:'Female',data:DIS_SEX_RESP.map(d=>d.F),backgroundColor:RESP_FEM,borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:LEG,tooltip:TT_OPT},scales:{x:SC.x,y:{...SC.y,beginAtZero:true}}}});
+new Chart(document.getElementById('disSexBarOther'),{type:'bar',data:{labels:DIS_SEX_OTHER.map(d=>d.d),datasets:[{label:'Male',data:DIS_SEX_OTHER.map(d=>d.M),backgroundColor:OTH_MALE,borderRadius:4,borderSkipped:false},{label:'Female',data:DIS_SEX_OTHER.map(d=>d.F),backgroundColor:OTH_FEM,borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:LEG,tooltip:TT_OPT},scales:{x:SC.x,y:{...SC.y,beginAtZero:true}}}});
+
+new Chart(document.getElementById('ageDisStacked'),{type:'bar',data:{labels:DIS_AGE.map(d=>d.d),datasets:AGG.map((ag,i)=>({label:ag,data:DIS_AGE.map(d=>d.v[i]),backgroundColor:APAL[i],borderRadius:i===AGG.length-1?4:0,borderSkipped:false}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:LEG,tooltip:TT_OPT},scales:{x:{...SC.x,stacked:true},y:{...SC.y,stacked:true,beginAtZero:true}}}});
+new Chart(document.getElementById('ethDisBar'),{type:'bar',data:{labels:ETH_DIS.map(d=>d.d),datasets:[{label:'Hispanic/Latino',data:ETH_DIS.map(d=>d.HL),backgroundColor:'#00d4aa',borderRadius:4,borderSkipped:false},{label:'Not Hispanic/Latino',data:ETH_DIS.map(d=>d.NH),backgroundColor:'#4f9cf9',borderRadius:4,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:LEG,tooltip:TT_OPT},scales:{x:{...SC.x,beginAtZero:true},y:SC.y}}});
+
+// Disease Composition — SPLIT donuts
+const RESP_DIS=TOP_DIS.filter(d=>RESP_SET.has(d.d)&&d.d!=="COVID-19 Serology");
+const OTHER_DIS=TOP_DIS.filter(d=>!RESP_SET.has(d.d));
+const RESP_COLS=['#4f9cf9','#00d4aa','#38bdf8','#a78bfa'];
+const OTHER_COLS=['#f97316','#fb7185','#fbbf24','#34d399','#a78bfa','#60a5fa','#f472b6','#c084fc','#e879f9','#2dd4bf','#f59e0b'];
+new Chart(document.getElementById('disDonutResp'),{type:'doughnut',data:{labels:RESP_DIS.map(d=>d.d),datasets:[{data:RESP_DIS.map(d=>d.n),backgroundColor:RESP_COLS,borderWidth:0,hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{family:"'DM Mono',monospace",size:10},boxWidth:7,boxHeight:7,padding:7}},tooltip:TT_OPT}}});
+new Chart(document.getElementById('disDonutOther'),{type:'doughnut',data:{labels:OTHER_DIS.map(d=>d.d),datasets:[{data:OTHER_DIS.map(d=>d.n),backgroundColor:OTHER_COLS,borderWidth:0,hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{family:"'DM Mono',monospace",size:10},boxWidth:7,boxHeight:7,padding:7}},tooltip:TT_OPT}}});
+
+// ═══════════════════════════════════════════════
+// SEASONAL CHARTS
+// ═══════════════════════════════════════════════
+let tsChart=null;
+
+function buildSeasonalCharts() {
+  // Monthly totals split
+  const RESP_MONTH_COVID= SEA_DATA['COVID-19'];
+  const RESP_MONTH_FLU=   SEA_DATA['Influenza'];
+  const RESP_MONTH_RSV=   SEA_DATA['RSV'];
+  const RESP_MONTH_TOTAL= MONTHS.map((_,i)=>RESP_MONTH_COVID[i]+RESP_MONTH_FLU[i]+RESP_MONTH_RSV[i]);
+  const OTHER_MONTH=      ALL_MONTH.map((v,i)=>v-RESP_MONTH_TOTAL[i]);
+
+  // Respiratory stacked monthly
+  new Chart(document.getElementById('respMonthBar'),{type:'bar',data:{labels:MONTHS,datasets:[
+    {label:'COVID-19',data:RESP_MONTH_COVID,backgroundColor:'rgba(0,212,170,0.75)',stack:'resp'},
+    {label:'Influenza',data:RESP_MONTH_FLU, backgroundColor:'rgba(79,156,249,0.75)',stack:'resp'},
+    {label:'RSV',      data:RESP_MONTH_RSV,  backgroundColor:'rgba(56,189,248,0.75)',stack:'resp'},
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:LEG,tooltip:{...TT_OPT,mode:'index',intersect:false}},scales:{x:{...SC.x,stacked:true},y:{...SC.y,stacked:true,beginAtZero:true}}}});
+
+  // Other monthly
+  new Chart(document.getElementById('otherMonthBar'),{type:'bar',data:{labels:MONTHS,datasets:[
+    {label:'Other Conditions',data:OTHER_MONTH,backgroundColor:MONTHS.map((_,i)=>{const t=OTHER_MONTH[i]/Math.max(...OTHER_MONTH,1);return `rgba(249,115,22,${0.2+t*0.7})`;}),borderRadius:5,borderSkipped:false}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:TT_OPT},scales:SC}});
+
+  // All-month total (reference)
+  new Chart(document.getElementById('allMonthBar'),{type:'bar',data:{labels:MONTHS,datasets:[{label:'Total Cases',data:ALL_MONTH,backgroundColor:MONTHS.map((_,i)=>{const t=ALL_MONTH[i]/Math.max(...ALL_MONTH);return `rgba(0,212,170,${0.2+t*0.8})`;}),borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:TT_OPT},scales:SC}});
+
+  new Chart(document.getElementById('radarResp'),{type:'radar',data:{labels:MONTHS,datasets:[
+    {label:'COVID-19',data:SEA_DATA['COVID-19'],borderColor:'#00d4aa',backgroundColor:'rgba(0,212,170,0.1)',pointBackgroundColor:'#00d4aa',borderWidth:2,pointRadius:3},
+    {label:'Influenza',data:SEA_DATA['Influenza'],borderColor:'#4f9cf9',backgroundColor:'rgba(79,156,249,0.1)',pointBackgroundColor:'#4f9cf9',borderWidth:2,pointRadius:3},
+    {label:'RSV',data:SEA_DATA['RSV'],borderColor:'#f97316',backgroundColor:'rgba(249,115,22,0.1)',pointBackgroundColor:'#f97316',borderWidth:2,pointRadius:3},
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:LEG,tooltip:TT_OPT},scales:{r:{ticks:{color:'#64748b',backdropColor:'transparent',font:{family:"'DM Mono',monospace",size:9}},grid:{color:'rgba(255,255,255,0.06)'},pointLabels:{color:'#94a3b8',font:{family:"'DM Mono',monospace",size:10}},angleLines:{color:'rgba(255,255,255,0.06)'}}}}});
+  new Chart(document.getElementById('radarOther'),{type:'radar',data:{labels:MONTHS,datasets:[
+    {label:'Chlamydia',data:SEA_DATA['Chlamydia'],borderColor:'#a78bfa',backgroundColor:'rgba(167,139,250,0.1)',pointBackgroundColor:'#a78bfa',borderWidth:2,pointRadius:3},
+    {label:'Giardiasis',data:SEA_DATA['Giardiasis'],borderColor:'#fbbf24',backgroundColor:'rgba(251,191,36,0.1)',pointBackgroundColor:'#fbbf24',borderWidth:2,pointRadius:3},
+    {label:'Campylobacteriosis',data:SEA_DATA['Campylobacteriosis'],borderColor:'#34d399',backgroundColor:'rgba(52,211,153,0.1)',pointBackgroundColor:'#34d399',borderWidth:2,pointRadius:3},
+    {label:'Salmonellosis',data:SEA_DATA['Salmonellosis'],borderColor:'#fb7185',backgroundColor:'rgba(251,113,133,0.1)',pointBackgroundColor:'#fb7185',borderWidth:2,pointRadius:3},
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:LEG,tooltip:TT_OPT},scales:{r:{ticks:{color:'#64748b',backdropColor:'transparent',font:{family:"'DM Mono',monospace",size:9}},grid:{color:'rgba(255,255,255,0.06)'},pointLabels:{color:'#94a3b8',font:{family:"'DM Mono',monospace",size:10}},angleLines:{color:'rgba(255,255,255,0.06)'}}}}});
+  buildSeaTable();
+  buildTsChart();
+  document.getElementById('tsSelect').addEventListener('change', buildTsChart);
+}
+
+function buildSeaTable() {
+  const scale = document.getElementById('seaScale').value;
+  let gmax=0;
+  Object.values(SEA_DATA).forEach(arr=>arr.forEach(v=>{if(v>gmax)gmax=v;}));
+  const RESP_NAMES=["COVID-19","Influenza","RSV"];
+  const diseases=Object.keys(SEA_DATA);
+  const respDiseases=diseases.filter(d=>RESP_NAMES.includes(d));
+  const otherDiseases=diseases.filter(d=>!RESP_NAMES.includes(d));
+
+  function buildRows(list, cssClass){
+    let html='';
+    list.forEach(dis=>{
+      const arr=SEA_DATA[dis];
+      const rowMax=Math.max(...arr);
+      const total=arr.reduce((a,b)=>a+b,0);
+      html+=`<tr class="${cssClass}"><td class="dis-td">${dis}</td>`;
+      arr.forEach((v,mi)=>{
+        let t=0;
+        if(v>0){
+          if(scale==='global') t=v/Math.max(gmax,1);
+          else if(scale==='row') t=v/Math.max(rowMax,1);
+          else t=Math.log(v+1)/Math.log(Math.max(gmax,2)+1);
+        }
+        const col=v===0?null:lerpColor(Math.max(0.12,t));
+        html+=`<td ${col?`style="background:${col}"`:''}
+          onmouseenter="showTTSea(event,'${dis}',${v},'${MONTHS[mi]}')"
+          onmouseleave="hideTT()">
+          <div class="sea-cell ${v===0?'sea-zero':''}">${v>0?v:'·'}</div>
+        </td>`;
+      });
+      html+=`<td style="padding:5px 8px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">${total}</td></tr>`;
+    });
+    return html;
+  }
+
+  let html=`<thead><tr>
+    <th class="dis-th">Disease</th>${MONTHS.map(m=>`<th>${m}</th>`).join('')}<th>Total</th>
+  </tr></thead><tbody>`;
+  html+=`<tr><td class="dis-td sea-group-header resp" style="padding:10px 8px 4px;font-size:9px;letter-spacing:.1em;color:#4f9cf9;background:transparent;text-transform:uppercase;font-family:'DM Mono',monospace;" colspan="${MONTHS.length+2}">🫁 Respiratory Viruses</td></tr>`;
+  html+=buildRows(respDiseases,'is-resp');
+  html+=`<tr><td class="dis-td" style="padding:10px 8px 4px;font-size:9px;letter-spacing:.1em;color:#f97316;background:transparent;text-transform:uppercase;font-family:'DM Mono',monospace;" colspan="${MONTHS.length+2}">🦠 Other Conditions</td></tr>`;
+  html+=buildRows(otherDiseases,'is-other');
+  html+='</tbody>';
+  document.getElementById('seaTable').innerHTML=html;
+}
+
+function buildTsChart() {
+  const sel=document.getElementById('tsSelect');
+  const chosen=[...sel.selectedOptions].map(o=>o.value);
+  const labels=[];
+  for(let yr=2023;yr<=2025;yr++){
+    const maxMo=yr===2025?1:12;
+    for(let mo=1;mo<=maxMo;mo++) labels.push(`${MONTHS[mo-1]} ${yr}`);
+  }
+  const datasets=chosen.map((dis,i)=>{
+    const data=labels.map(lbl=>{
+      const [mStr,yrStr]=lbl.split(' ');
+      const yr=parseInt(yrStr), mo=MONTHS.indexOf(mStr)+1;
+      const entry=TS_ENTRIES.find(e=>e.d===dis&&e.yr===yr&&e.mo===mo);
+      return entry?entry.n:0;
+    });
+    const col=PAL[i%PAL.length];
+    return {label:dis,data,borderColor:col,backgroundColor:col+'22',fill:true,tension:0.35,borderWidth:2,pointRadius:2.5,pointHoverRadius:5};
+  });
+  if(tsChart){tsChart.destroy();}
+  tsChart=new Chart(document.getElementById('timeSeries'),{type:'line',data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:LEG,tooltip:{...TT_OPT,mode:'index',intersect:false}},scales:{x:{...SC.x,ticks:{...SC.x.ticks,maxRotation:45,minRotation:45,maxTicksLimit:20}},y:{...SC.y,beginAtZero:true}}}});
+}
+
+// ═══════════════════════════════════════════════
+// ZIP HEATMAP PAGE
+// ═══════════════════════════════════════════════
+let activeZip=null;
+let zipSearch='';
+
+function buildZipPage() { buildMap(); buildZipLegend(); buildZipTable(); }
+
+function lerpColor(t){
+  const lo=[26,34,52],hi=[0,212,170];
+  return `rgb(${Math.round(lo[0]+(hi[0]-lo[0])*t)},${Math.round(lo[1]+(hi[1]-lo[1])*t)},${Math.round(lo[2]+(hi[2]-lo[2])*t)})`;
+}
+
+function buildMap(){
+  const svg=document.getElementById('mapSvg');
+  const lats=ZIPS.map(z=>z.lat),lons=ZIPS.map(z=>z.lon);
+  const minLat=Math.min(...lats)-.12,maxLat=Math.max(...lats)+.12;
+  const minLon=Math.min(...lons)-.12,maxLon=Math.max(...lons)+.12;
+  const W=280,H=400,pad=28;
+  const xS=lon=>pad+(lon-minLon)/(maxLon-minLon)*(W-2*pad);
+  const yS=lat=>pad+(1-(lat-minLat)/(maxLat-minLat))*(H-2*pad);
+  const maxT=Math.max(...ZIPS.map(z=>z.total));
+  let h='';
+  for(let i=0;i<ZIPS.length;i++) for(let j=i+1;j<ZIPS.length;j++){
+    const a=ZIPS[i],b=ZIPS[j];
+    h+=`<line x1="${xS(a.lon).toFixed(1)}" y1="${yS(a.lat).toFixed(1)}" x2="${xS(b.lon).toFixed(1)}" y2="${yS(b.lat).toFixed(1)}" stroke="#1e2d47" stroke-width="1"/>`;
+  }
+  ZIPS.forEach((z,i)=>{
+    const x=xS(z.lon).toFixed(1),y=yS(z.lat).toFixed(1);
+    const r=7+(z.total/maxT)*24;
+    const col=ZIP_COLORS[i];
+    h+=`<circle cx="${x}" cy="${y}" r="${r.toFixed(1)}" fill="${col}" fill-opacity="0.18" stroke="${col}" stroke-width="1.5" style="cursor:pointer" data-zip="${z.zip}" class="mbub"/>`;
+    h+=`<text x="${x}" y="${(+y+4).toFixed(1)}" text-anchor="middle" font-family="'DM Mono',monospace" font-size="9" fill="${col}" style="pointer-events:none">${z.zip}</text>`;
+  });
+  svg.innerHTML=h;
+  svg.querySelectorAll('.mbub').forEach(el=>{
+    el.addEventListener('click',()=>{ activeZip=activeZip===el.dataset.zip?null:el.dataset.zip; updateZipAll(); });
+  });
+}
+
+function buildZipLegend(){
+  document.getElementById('zipLegend').innerHTML=ZIPS.map((z,i)=>`
+    <div class="zli" data-zip="${z.zip}" onclick="toggleZip('${z.zip}')">
+      <div class="zli-dot" style="background:${ZIP_COLORS[i]}"></div>
+      <div class="zli-label"><strong>${z.zip}</strong> ${z.town}</div>
+      <div class="zli-n">${z.total}</div>
+    </div>`).join('');
+}
+
+function toggleZip(z){activeZip=activeZip===z?null:z;updateZipAll();}
+function zipSearchChanged(){zipSearch=document.getElementById('zipSearch').value.toLowerCase();buildZipTable();}
+
+function updateZipAll(){
+  document.querySelectorAll('.mbub').forEach(el=>{
+    const sel=!activeZip||el.dataset.zip===activeZip;
+    el.setAttribute('fill-opacity',sel?'0.18':'0.04');
+    el.setAttribute('stroke-width',sel?'1.5':'0.5');
+  });
+  document.querySelectorAll('.zli').forEach(el=>{el.classList.toggle('active',el.dataset.zip===activeZip);});
+  buildZipTable();
+}
+
+function buildZipTable(){
+  const scale=document.getElementById('zipScale').value;
+  const show=document.getElementById('zipShow').value;
+  let gmax=0;
+  ZIP_DISEASES.forEach((_,di)=>ZIPS.forEach(z=>{gmax=Math.max(gmax,ZIP_MATRIX[z.zip][di]||0);}));
+  const rows=ZIP_DISEASES.map((dis,di)=>{
+    const vals=ZIPS.map(z=>ZIP_MATRIX[z.zip][di]||0);
+    const total=vals.reduce((a,b)=>a+b,0);
+    if(show==='nonzero'&&total===0) return null;
+    if(zipSearch&&!dis.toLowerCase().includes(zipSearch)) return null;
+    return {dis,di,vals,total,rowMax:Math.max(...vals)};
+  }).filter(Boolean);
+  let html=`<thead><tr><th class="dn-th">Disease</th>${ZIPS.map((z,i)=>`<th><div style="display:flex;flex-direction:column;align-items:center;gap:2px"><span style="color:${ZIP_COLORS[i]};cursor:pointer;font-size:11px" onclick="toggleZip('${z.zip}')">${z.zip}</span><span style="font-size:9px;color:var(--muted)">${z.town}</span><span style="font-size:9px;color:var(--muted)">n=${z.total}</span></div></th>`).join('')}<th style="padding:5px 8px;color:var(--muted)">Total</th></tr></thead><tbody>`;
+  rows.forEach(({dis,vals,total,rowMax})=>{
+    html+=`<tr><td class="dn-td" title="${dis}">${dis}</td>`;
+    ZIPS.forEach((z,zi)=>{
+      const v=vals[zi];
+      let t=0;
+      if(v>0){
+        if(scale==='global') t=v/Math.max(gmax,1);
+        else if(scale==='row') t=v/Math.max(rowMax,1);
+        else t=Math.log(v+1)/Math.log(Math.max(gmax,2)+1);
+      }
+      const col=v>0?lerpColor(Math.max(0.12,t)):null;
+      const dim=activeZip&&z.zip!==activeZip?'z-dim':'';
+      const hl=activeZip===z.zip?'z-hl':'';
+      html+=`<td class="${dim} ${hl}" ${col?`style="background:${col}"`:''}
+        onmouseenter="showTTZip(event,'${dis}','${z.zip}','${z.town}',${v},${total})"
+        onmouseleave="hideTT()">
+        <div class="ht-cell ${!col?'ht-zero':''}">${v>0?v:'·'}</div>
+      </td>`;
+    });
+    html+=`<td style="padding:5px 10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">${total}</td></tr>`;
+  });
+  if(!rows.length) html+=`<tr><td colspan="${ZIPS.length+2}" style="padding:20px;text-align:center;color:var(--muted);font-family:'DM Mono',monospace;font-size:11px">No results</td></tr>`;
+  html+='</tbody>';
+  document.getElementById('htTable').innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════
+// TOOLTIPS
+// ═══════════════════════════════════════════════
+function showTTSea(e,dis,val,month){
+  if(!val){hideTT();return;}
+  const tot=SEA_DATA[dis].reduce((a,b)=>a+b,0);
+  document.getElementById('tt').innerHTML=`<div class="tt-title">${dis}</div><div class="tt-row"><span>Month</span><span class="tt-val">${month}</span></div><div class="tt-row"><span>Cases</span><span class="tt-val">${val}</span></div><div class="tt-row"><span>% of annual</span><span class="tt-val">${tot>0?(val/tot*100).toFixed(1):0}%</span></div>`;
+  document.getElementById('tt').style.display='block';moveTT(e);
+}
+function showTTZip(e,dis,zip,town,val,total){
+  if(!val){hideTT();return;}
+  document.getElementById('tt').innerHTML=`<div class="tt-title">${dis}</div><div class="tt-row"><span>ZIP</span><span class="tt-val">${zip} · ${town}</span></div><div class="tt-row"><span>Cases</span><span class="tt-val">${val}</span></div><div class="tt-row"><span>% of disease total</span><span class="tt-val">${total>0?(val/total*100).toFixed(1):0}%</span></div>`;
+  document.getElementById('tt').style.display='block';moveTT(e);
+}
+function hideTT(){document.getElementById('tt').style.display='none';}
+function moveTT(e){const tt=document.getElementById('tt');tt.style.left=(e.clientX+14)+'px';tt.style.top=(e.clientY-10)+'px';}
+document.addEventListener('mousemove',e=>{if(document.getElementById('tt').style.display==='block')moveTT(e);});
+</script>
+</body>
+</html>
