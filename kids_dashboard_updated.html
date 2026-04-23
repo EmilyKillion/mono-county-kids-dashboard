@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mono County Kids Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a18; min-height: 100vh; }
+  .page { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+  .dash-header { margin-bottom: 2rem; border-bottom: 1px solid #e0dfd8; padding-bottom: 1.25rem; }
+  .dash-title { font-size: 26px; font-weight: 600; color: #1a1a18; }
+  .dash-sub { font-size: 14px; color: #6b6b67; margin-top: 5px; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .tab { padding: 7px 16px; border-radius: 8px; border: 1px solid #d3d1c7; font-size: 13px; cursor: pointer; background: #fff; color: #6b6b67; transition: all 0.15s; font-family: inherit; }
+  .tab.active { background: #1a1a18; color: #fff; border-color: #1a1a18; font-weight: 500; }
+  .tab:hover:not(.active) { background: #f1efe8; border-color: #b4b2a9; }
+  .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
+  .metric-card { background: #f1efe8; border-radius: 8px; padding: 14px 16px; }
+  .metric-label { font-size: 12px; color: #6b6b67; margin-bottom: 6px; line-height: 1.4; }
+  .metric-value { font-size: 22px; font-weight: 600; color: #1a1a18; }
+  .metric-year { font-size: 11px; color: #888780; margin-top: 3px; }
+  .chart-card { background: #fff; border: 1px solid #e0dfd8; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+  .chart-title { font-size: 14px; font-weight: 500; color: #1a1a18; margin-bottom: 1rem; }
+  .section { display: none; }
+  .section.active { display: block; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table th { text-align: left; padding: 9px 12px; font-weight: 500; color: #6b6b67; border-bottom: 1px solid #e0dfd8; font-size: 12px; background: #f9f8f5; }
+  .data-table td { padding: 9px 12px; border-bottom: 1px solid #f1efe8; color: #1a1a18; vertical-align: top; }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: #f9f8f5; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; margin-top: 4px; }
+  .badge-dem { background: #E6F1FB; color: #0C447C; }
+  .badge-mth { background: #FAEEDA; color: #633806; }
+  .badge-bh { background: #FBEAF0; color: #72243E; }
+  .badge-oh { background: #EAF3DE; color: #27500A; }
+  .badge-sdh { background: #EEEDFE; color: #3C3489; }
+  .badge-eco { background: #E1F5EE; color: #085041; }
+  .badge-tob { background: #FFF0E6; color: #7A3200; }
+  .badge-chks { background: #F0E6FF; color: #4A0080; }
+  .pending { color: #b4b2a9; font-style: italic; }
+  .note-box { background: #f1efe8; border-radius: 8px; padding: 14px 16px; font-size: 13px; color: #6b6b67; margin-top: 1rem; }
+  .chks-banner { background: #EEF6FF; border: 1px solid #B5D4F4; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #0C447C; margin-bottom: 1.25rem; }
+  .chks-banner strong { font-weight: 600; }
+  .grade-tabs { display: flex; gap: 4px; margin-bottom: 1rem; }
+  .grade-tab { padding: 5px 12px; border-radius: 6px; border: 1px solid #d3d1c7; font-size: 12px; cursor: pointer; background: #f9f8f5; color: #6b6b67; font-family: inherit; }
+  .grade-tab.active { background: #378ADD; color: #fff; border-color: #378ADD; }
+  .warn-high { font-size: 11px; color: #A32D2D; margin-top: 2px; }
+  .warn-low { font-size: 11px; color: #27500A; margin-top: 2px; }
+  @media (max-width: 640px) {
+    .two-col, .three-col { grid-template-columns: 1fr; }
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    .page { padding: 1rem; }
+    .dash-title { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="dash-header">
+    <div class="dash-title">Mono County — Kids Dashboard</div>
+    <div class="dash-sub">Children &amp; family health metrics &middot; Mono County, CA &middot; Data sourced from ACS, CDPH, CHR, Mono County CHA, and CA Healthy Kids Survey (CHKS) 2023–24</div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('overview', this)">Overview</button>
+    <button class="tab" onclick="showTab('demographics', this)">Demographics</button>
+    <button class="tab" onclick="showTab('behavioral', this)">Behavioral health</button>
+    <button class="tab" onclick="showTab('oral', this)">Oral health</button>
+    <button class="tab" onclick="showTab('maternal', this)">Maternal</button>
+    <button class="tab" onclick="showTab('chks', this)">CHKS 2023–24</button>
+    <button class="tab" onclick="showTab('tobacco', this)">Tobacco &amp; vaping</button>
+    <button class="tab" onclick="showTab('all', this)">All metrics</button>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div id="overview" class="section active">
+    <div style="font-size:12px;color:#6b6b67;margin-bottom:12px;">
+      <span style="display:inline-flex;align-items:center;gap:5px;margin-right:16px;"><span style="width:10px;height:10px;border-radius:2px;background:#1a1a18;display:inline-block;"></span> Mono County</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:#B5D4F4;display:inline-block;"></span> California avg</span>
+      <span style="margin-left:16px;">▲ above CA avg &nbsp; ▼ below CA avg</span>
+    </div>
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Children (under 18)</div>
+        <div class="metric-value">2,420</div>
+        <div class="metric-year">2023 · ACS estimate</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Median household income</div>
+        <div class="metric-value">$86,953</div>
+        <div class="warn-high">▼ CA avg $103,678</div>
+        <div class="metric-year">2023 · ACS / CA Dept of Finance</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Children in poverty</div>
+        <div class="metric-value">11%</div>
+        <div class="warn-low">▼ CA avg 15%</div>
+        <div class="metric-year">2023 · CDPH</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Hispanic children in poverty</div>
+        <div class="metric-value">31%</div>
+        <div class="warn-high">▲ CA avg ~25%</div>
+        <div class="metric-year">2024 · CDPH / CHA</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Teen birth rate (per 1,000)</div>
+        <div class="metric-value">18.6</div>
+        <div class="warn-high">▲ CA avg 10.5</div>
+        <div class="metric-year">2022 · CHR</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Frequent mental distress</div>
+        <div class="metric-value">17%</div>
+        <div class="warn-high">▲ CA avg 14%</div>
+        <div class="metric-year">2022 · CHR / CDC BRFSS</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Dentists per 100k</div>
+        <div class="metric-value">46.2</div>
+        <div class="warn-high">▼ CA avg 92.9</div>
+        <div class="metric-year">2024 · CHR / CHNA</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Kindergarteners – untreated decay</div>
+        <div class="metric-value">26.9%</div>
+        <div class="warn-high">▲ CA approx 20%</div>
+        <div class="metric-year">2024–25 · SCOHR / CHNA</div>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="chart-card">
+        <div class="chart-title">Poverty rates — Mono County vs. CA avg</div>
+        <div style="position:relative;height:200px;"><canvas id="povertyChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Behavioral health — Mono County vs. CA avg (per 100k)</div>
+        <div style="position:relative;height:200px;"><canvas id="bhChart"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Key rates — Mono County vs. California average</div>
+      <div style="position:relative;height:240px;"><canvas id="ratesChart"></canvas></div>
+      <p style="font-size:12px;color:#888780;margin-top:10px;">CA averages: children poverty CDPH; teen birth rate CDPH/Kidsdata.org; low birthweight March of Dimes; mental distress CDC BRFSS; dentists CHR 2024.</p>
+    </div>
+  </div>
+
+  <!-- DEMOGRAPHICS -->
+  <div id="demographics" class="section">
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-label">Total minors</div><div class="metric-value">2,349</div><div class="metric-year">2021 · Census</div></div>
+      <div class="metric-card"><div class="metric-label">Est. population under 18</div><div class="metric-value">2,420</div><div class="metric-year">2023 · Derived ACS</div></div>
+      <div class="metric-card"><div class="metric-label">Children below poverty</div><div class="metric-value">11%</div><div class="metric-year">2023 · CDPH</div></div>
+      <div class="metric-card"><div class="metric-label">Hispanic children in poverty</div><div class="metric-value">31%</div><div class="metric-year">2024 · CHA</div></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Poverty rate comparison by group</div>
+      <div style="position:relative;height:240px;"><canvas id="demoPovChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- BEHAVIORAL HEALTH -->
+  <div id="behavioral" class="section">
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-label">Poor mental health days / mo</div><div class="metric-value">5.2</div><div class="metric-year">2021 · CHR</div></div>
+      <div class="metric-card"><div class="metric-label">Frequent mental distress</div><div class="metric-value">17%</div><div class="metric-year">2022 · CHR</div></div>
+      <div class="metric-card"><div class="metric-label">Suicidal ideation rate / 100k</div><div class="metric-value">39</div><div class="metric-year">2024 · MHA</div></div>
+      <div class="metric-card"><div class="metric-label">Severe depression risk / 100k</div><div class="metric-value">40</div><div class="metric-year">2024 · MHA</div></div>
+    </div>
+
+    <div class="chks-banner">
+      <strong>New: 2023–24 CHKS School-Based Mental Health Data (Eastern Sierra Unified)</strong> — The CA Healthy Kids Survey provides student-reported mental health data. See the <a href="#" onclick="showTab('chks', document.querySelectorAll('.tab')[5]);return false;" style="color:#0C447C;">CHKS tab</a> for full school climate results.
+    </div>
+
+    <div class="two-col">
+      <div class="chart-card">
+        <div class="chart-title">Chronic sadness / hopelessness — by grade (CHKS 2023–24)</div>
+        <div style="position:relative;height:200px;"><canvas id="sadnessChart"></canvas></div>
+        <p style="font-size:12px;color:#888780;margin-top:8px;">% reporting "sad or hopeless almost every day for 2+ weeks." Gr. 11 rate (33%) is notably elevated. Source: CHKS 2023–24 Secondary Report, Eastern Sierra Unified.</p>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Social-emotional distress — by grade (CHKS 2023–24)</div>
+        <div style="position:relative;height:200px;"><canvas id="distressChart"></canvas></div>
+        <p style="font-size:12px;color:#888780;margin-top:8px;">% reporting "pretty much/very much true" on distress scale (hard to relax, felt sad, easily irritated). Source: CHKS 2023–24 Secondary Report.</p>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="chart-card">
+        <div class="chart-title">Suicidal ideation — by grade (CHKS 2023–24)</div>
+        <div style="position:relative;height:180px;"><canvas id="suicideChart"></canvas></div>
+        <p style="font-size:12px;color:#888780;margin-top:8px;">% seriously considering suicide in past 12 months. 22% of 11th graders reported this — a significant concern. Source: CHKS 2023–24 Secondary.</p>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Elem. 5th grade: stress &amp; loneliness (CHKS 2023–24)</div>
+        <div style="position:relative;height:180px;"><canvas id="elemStressChart"></canvas></div>
+        <p style="font-size:12px;color:#888780;margin-top:8px;">% reporting feeling "very stressed" or "very lonely" most/all of the time in past month. Source: CHKS 2023–24 Elementary, Mental Health Module.</p>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Behavioral health snapshot — Mono County vs. California (county-level)</div>
+      <div style="position:relative;height:280px;"><canvas id="bhDetailChart"></canvas></div>
+      <p style="font-size:12px;color:#888780;margin-top:12px;">CA averages sourced from Mental Health America 2024 State Report and CDC BRFSS/PLACES 2022. Suicidal ideation &amp; severe depression rates per 100,000 population; frequent distress as % of adults; poor mental health days as monthly average.</p>
+    </div>
+  </div>
+
+  <!-- ORAL HEALTH -->
+  <div id="oral" class="section">
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-label">Dentists per 100k (Mono vs CA: 92.9)</div><div class="metric-value">46.2</div><div class="metric-year">2024 · CHR / CHNA</div></div>
+      <div class="metric-card"><div class="metric-label">Clinics accepting Medi-Cal (kids)</div><div class="metric-value">1</div><div class="metric-year">2025 · CHNA</div></div>
+      <div class="metric-card"><div class="metric-label">Communities w/o local dental clinic</div><div class="metric-value">6</div><div class="metric-year">2025 · CHNA</div></div>
+      <div class="metric-card"><div class="metric-label">Pediatric encounters at Mammoth Hosp. (2022–25)</div><div class="metric-value">9,627</div><div class="metric-year">2025 · CHNA</div></div>
+      <div class="metric-card"><div class="metric-label">Kids with current dental pain/decay (survey)</div><div class="metric-value">12%</div><div class="metric-year">2025 · CHNA Survey</div></div>
+      <div class="metric-card"><div class="metric-label">Kids with sealants</div><div class="metric-value">26%</div><div class="metric-year">2025 · CHNA Survey</div></div>
+    </div>
+    <div class="two-col">
+      <div class="chart-card">
+        <div class="chart-title">KOHA kindergarten assessment participation</div>
+        <div style="position:relative;height:220px;"><canvas id="kohaPoaChart"></canvas></div>
+        <p style="font-size:12px;color:#888780;margin-top:8px;">% of eligible kindergarteners submitting Proof of Assessment. Source: SCOHR / 2025 Oral Health CHNA.</p>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Kindergarten oral health outcomes — Mono County vs. CA benchmark</div>
+        <div style="position:relative;height:220px;"><canvas id="kohaOutcomesChart"></canvas></div>
+        <p style="font-size:12px;color:#888780;margin-top:8px;">Mono County: SCOHR / 2025 Oral Health CHNA (2024–25). CA benchmark: caries experience ~50%+ (CDE); untreated decay ~20% (CA Oral Health Plan). Early decay not tracked statewide.</p>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Dentists per 100k — Mono County vs. California</div>
+      <div style="position:relative;height:180px;"><canvas id="dentistRatioChart"></canvas></div>
+      <p style="font-size:12px;color:#888780;margin-top:8px;">Mono County has approximately half the statewide dentist-to-population ratio, with all providers concentrated in Mammoth Lakes. Source: County Health Rankings 2024 / 2025 Oral Health CHNA.</p>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Medi-Cal annual dental visit rate — Mono County (2013–2023)</div>
+      <div style="position:relative;height:220px;"><canvas id="medicalUtilChart"></canvas></div>
+      <p style="font-size:12px;color:#888780;margin-top:8px;">% of Medi-Cal members with at least one annual dental visit. Consistently below statewide averages. Source: DHCS Medi-Cal Dental Services Division / 2025 Oral Health CHNA.</p>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Current dental issues by racial/ethnic group (community survey)</div>
+      <div style="position:relative;height:220px;"><canvas id="oralEqChart"></canvas></div>
+      <p style="font-size:12px;color:#888780;margin-top:8px;">% reporting current dental decay, pain, or swelling. Source: 2025 Oral Health CHNA Community Survey (N=320).</p>
+    </div>
+  </div>
+
+  <!-- MATERNAL -->
+  <div id="maternal" class="section">
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-label">Teen birth rate (15–19) per 1,000</div><div class="metric-value">18.6</div><div class="metric-year">2022 · CHR</div></div>
+      <div class="metric-card"><div class="metric-label">Low birthweight births</div><div class="metric-value">8.4%</div><div class="metric-year">2022 · CHR</div></div>
+      <div class="metric-card"><div class="metric-label">Early prenatal care (1st trimester)</div><div class="metric-value">84.4%</div><div class="metric-year">2024 · CHA</div></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Maternal health — Mono County vs. California</div>
+      <div style="position:relative;height:280px;"><canvas id="maternalChart"></canvas></div>
+      <p style="font-size:12px;color:#888780;margin-top:12px;">CA averages: CDPH/Kidsdata.org (teen birth rate ~10.5/1,000, 2022), March of Dimes PeriStats (low birthweight 7.4%, 2022; early prenatal care 84.3%, 2023).</p>
+    </div>
+  </div>
+
+  <!-- CHKS 2023-24 -->
+  <div id="chks" class="section">
+    <div class="chks-banner">
+      <strong>California Healthy Kids Survey (CHKS) 2023–24 — Eastern Sierra Unified School District</strong><br>
+      Elementary (Grade 5): n=32, 91% response rate across 4 schools (Antelope, Bridgeport, Edna Beaman, Lee Vining Elementary). Secondary: Grades 7, 9, 11 surveyed. Data prepared by WestEd for California Dept. of Education.
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">School climate key indicators — Elementary Grade 5 (CHKS 2023–24)</div>
+      <div style="position:relative;height:300px;"><canvas id="chksElemClimateChart"></canvas></div>
+      <p style="font-size:12px;color:#888780;margin-top:8px;">% responding "Yes, most of the time" or "Yes, all of the time." Source: CHKS 2023–24 Elementary Main Report, Eastern Sierra Unified.</p>
+    </div>
+
+    <div class="two-col">
+      <div class="chart-card">
+        <div class="chart-title">School climate — Secondary by grade (CHKS 2023–24)</div>
+        <div style="position:relative;height:280px;"><canvas id="chksSecClimateChart"></canvas></div>
+        <p style="font-size:12px;color:#888780;margin-top:8px;">% "pretty much/very much true" or equivalent positive response. Source: CHKS 2023–24 Secondary Main Report, Eastern Sierra Unified.</p>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Safety &amp; bullying — Secondary by grade (CHKS 2023–24)</div>
+        <div style="position:relative;height:280px;"><canvas id="chksSecSafetyChart"></canvas></div>
+        <p style="font-size:12px;color:#888780;margin-top:8px;">% reporting each indicator in past 12 months (harassment/bullying) or in-school perception. Source: CHKS 2023–24 Secondary.</p>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="chart-card">
+        <div class="chart-title">Elementary Grade 5: school safety &amp; victimization (CHKS 2023–24)</div>
+        <div style="position:relative;height:260px;"><canvas id="chksElemSafetyChart"></canvas></div>
+        <p style="font-size:12px;color:#888780;margin-top:8px;">Victimization = % reporting "some of the time" or more often. 53% were teased about body image — notably high. Source: CHKS 2023–24 Elementary.</p>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Home support — Grade 5 vs. school support (CHKS 2023–24)</div>
+        <div style="position:relative;height:260px;"><canvas id="chksHomeChart"></canvas></div>
+        <p style="font-size:12px;color:#888780;margin-top:8px;">High expectations at home (94%) far exceeds meaningful participation at school (43%), suggesting a gap between home ambitions and school engagement opportunities. Source: CHKS 2023–24 Elementary.</p>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Elem. Grade 5: mental health help-seeking (CHKS 2023–24)</div>
+      <div style="position:relative;height:260px;"><canvas id="chksHelpChart"></canvas></div>
+      <p style="font-size:12px;color:#888780;margin-top:8px;">When feeling sad/stressed/lonely/depressed, 31% said they'd "be afraid to get help" and 31% said they'd "not know what to do." Only 19% would seek a counselor. 38% wanted to talk to a counselor in the past year, but 39% who needed help didn't get it. Source: CHKS 2023–24 Elementary, Mental Health Supports Module.</p>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Secondary well-being indicators by grade (CHKS 2023–24)</div>
+      <div style="position:relative;height:280px;"><canvas id="chksWellbeingChart"></canvas></div>
+      <p style="font-size:12px;color:#888780;margin-top:8px;">Life satisfaction = % "satisfied" or "very satisfied." Optimism = % "pretty much/very much true." Chronic sadness and considered suicide reflect elevated mental health concerns especially in Grade 11. Source: CHKS 2023–24 Secondary.</p>
+    </div>
+  </div>
+
+  <!-- TOBACCO & VAPING -->
+  <div id="tobacco" class="section">
+    <div class="chks-banner">
+      <strong>Youth Tobacco &amp; Vaping — Eastern Sierra Unified / Mono County</strong><br>
+      School-based data from CHKS 2023–24 (Eastern Sierra Unified, Grades 7, 9, 11 and Grade 5). County-level context from CA Dept. of Public Health, CDC, and American Lung Association. Note: Small sample sizes (esp. Gr. 7 n≈15, Gr. 9 n≈13, Gr. 11 n≈18) mean individual percentages should be interpreted with caution.
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Ever used vape products (Grade 11)</div>
+        <div class="metric-value">28%</div>
+        <div class="warn-high">▲ Gr. 7: 0%, Gr. 9: 0%</div>
+        <div class="metric-year">2023–24 · CHKS Secondary</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Lifetime tobacco use (Grade 11)</div>
+        <div class="metric-value">22%</div>
+        <div class="warn-high">▲ Gr. 7: 0%, Gr. 9: 0%</div>
+        <div class="metric-year">2023–24 · CHKS Secondary</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Current tobacco use — past 30 days (Gr. 11)</div>
+        <div class="metric-value">6%</div>
+        <div class="metric-year">2023–24 · CHKS Secondary</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Current vaping (Gr. 11, past 30 days)</div>
+        <div class="metric-value">6%</div>
+        <div class="metric-year">2023–24 · CHKS Secondary</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Ever vaped (Gr. 5 — Elementary)</div>
+        <div class="metric-value">6%</div>
+        <div class="warn-high">Notable for 5th graders</div>
+        <div class="metric-year">2023–24 · CHKS Elementary</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Friends who vape (Gr. 5)</div>
+        <div class="metric-value">13%</div>
+        <div class="metric-year">2023–24 · CHKS Elementary</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">CA teen vaping rate (9th–12th grade)</div>
+        <div class="metric-value">~14%</div>
+        <div class="metric-year">2021–22 · CDPH CA Student Survey</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Mono adult smoking rate</div>
+        <div class="metric-value">~11%</div>
+        <div class="warn-high">≈ CA avg 10–11%</div>
+        <div class="metric-year">2022 · CDC PLACES / CHR</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="chart-card">
+        <div class="chart-title">Lifetime tobacco &amp; vaping use — by grade (CHKS 2023–24)</div>
+        <div style="position:relative;height:240px;"><canvas id="tobLifetimeChart"></canvas></div>
+        <p style="font-size:12px;color:#888780;margin-top:8px;">Lifetime use rises sharply by Grade 11. 28% ever used vape products; 22% used any tobacco product. Grades 7 and 9 report zero lifetime use, consistent with CA patterns at those ages. Source: CHKS 2023–24 Secondary.</p>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Current (past 30 days) tobacco &amp; vape use — by grade (CHKS 2023–24)</div>
+        <div style="position:relative;height:240px;"><canvas id="tobCurrentChart"></canvas></div>
+        <p style="font-size:12px;color:#888780;margin-top:8px;">Current use is concentrated in Grade 11. Zero current cigarette smoking across all grades. Vaping and tobacco nicotine use both at 6% among 11th graders. Source: CHKS 2023–24 Secondary.</p>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="chart-card">
+        <div class="chart-title">Perceived harm of tobacco/vaping — Gr. 11 (CHKS 2023–24)</div>
+        <div style="position:relative;height:240px;"><canvas id="tobHarmChart"></canvas></div>
+        <p style="font-size:12px;color:#888780;margin-top:8px;">% rating "great harm." Daily/heavy use is understood as harmful; occasional use is less recognized as harmful — especially vaping occasionally (39%) vs. cigarettes occasionally (22%). Prevention messaging gap. Source: CHKS 2023–24 Secondary.</p>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Perceived difficulty obtaining tobacco/vaping — by grade (CHKS 2023–24)</div>
+        <div style="position:relative;height:240px;"><canvas id="tobAccessChart"></canvas></div>
+        <p style="font-size:12px;color:#888780;margin-top:8px;">% rating "very difficult" to obtain. Access perception drops sharply by Grade 11 — with 56% of 11th graders saying cigarettes or vapes are fairly/very easy to get. Source: CHKS 2023–24 Secondary.</p>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Elementary Grade 5: tobacco/vaping attitudes &amp; peer behavior (CHKS 2023–24)</div>
+      <div style="position:relative;height:240px;"><canvas id="tobElemChart"></canvas></div>
+      <p style="font-size:12px;color:#888780;margin-top:8px;">Strong anti-tobacco norms among 5th graders (94% say smoking is "very bad"). However, 13% report friends who vape and 6% have ever vaped themselves — indicating early exposure exists. 66% report their class discussed smoking dangers; 56% discussed vaping harms. Source: CHKS 2023–24 Elementary, TUPE Module.</p>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">School anti-tobacco policy awareness — by grade (CHKS 2023–24)</div>
+      <div style="position:relative;height:200px;"><canvas id="tobPolicyChart"></canvas></div>
+      <p style="font-size:12px;color:#888780;margin-top:8px;">% who agree school bans tobacco use and vaping. Awareness is lower among 9th graders (54%) than 7th (73%) or 11th (83%), suggesting a mid-secondary messaging gap. No students in any grade reported secondhand smoke exposure on school property in the past 30 days. Source: CHKS 2023–24 Secondary.</p>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Context: CA youth tobacco trends &amp; Mono County adult smoking</div>
+      <div style="position:relative;height:220px;"><canvas id="tobContextChart"></canvas></div>
+      <p style="font-size:12px;color:#888780;margin-top:12px;">CA statewide youth vaping data from California Student Survey / CDPH (2021–22). Adult smoking rate for Mono County from CDC PLACES/CHR 2022. National youth vaping rate from CDC NYTS 2023 (~10% of high schoolers currently vape). Eastern Sierra 11th grade lifetime vaping (28%) exceeds statewide average of ~14% for 9th–12th graders combined.</p>
+    </div>
+
+    <div class="note-box">
+      <strong>Data note:</strong> CHKS sample sizes for Eastern Sierra Unified secondary are small (Grade 7 n≈15, Grade 9 n≈13, Grade 11 n≈18). Percentages should be interpreted with caution and as directional signals rather than precise prevalence estimates. The Tobacco-Use Prevention Education (TUPE) Module was not administered at secondary level in this cycle. For broader Mono County tobacco context, the California Dept. of Public Health's Tobacco Control Program and the American Lung Association State of Tobacco Control report provide county-level estimates for adults but youth-specific county-level data is limited outside the CHKS system.
+    </div>
+  </div>
+
+  <!-- ALL METRICS -->
+  <div id="all" class="section">
+    <div class="chart-card" style="overflow-x:auto;">
+      <table class="data-table">
+        <thead>
+          <tr><th>ID</th><th>Metric</th><th>Value</th><th>Year</th><th>Source</th></tr>
+        </thead>
+        <tbody id="allTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function showTab(id, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (btn && btn.classList) btn.classList.add('active');
+}
+
+const allData = [
+  { id: 'DEM_001', name: 'Total Number of Minors', value: '2,349', year: 2021, cat: 'dem', source: 'Census' },
+  { id: 'DEM_POP_01', name: 'Total Population (All Ages)', value: '13,169', year: 2023, cat: 'dem', source: 'ACS 5-year' },
+  { id: 'DEM_CHILD_01', name: 'Estimated Population Under 18', value: '2,420', year: 2023, cat: 'dem', source: 'Derived from ACS' },
+  { id: 'DEM_POV_01', name: 'Percent Below Poverty Level', value: '11%', year: 2023, cat: 'dem', source: 'ACS S1701' },
+  { id: 'ECON_INC_01', name: 'Median Household Income', value: '$86,953', year: 2023, cat: 'eco', source: 'ACS / DataUSA' },
+  { id: 'HLT_INS_01', name: 'Percent Uninsured Under 65', value: '11.6%', year: 2023, cat: 'dem', source: 'ACS QuickFacts' },
+  { id: 'DEM_002', name: 'Children Living Below Poverty', value: '11%', year: 2023, cat: 'dem', source: 'CDPH' },
+  { id: 'DEM_003', name: 'Children Below Poverty (Hispanic/Latino)', value: '31%', year: 2024, cat: 'dem', source: 'CDPH / CHR' },
+  { id: 'MAT_002', name: 'Teen Birth Rate (Females 15–19)', value: '18.6 per 1,000', year: 2022, cat: 'mth', source: 'CHR / CHA' },
+  { id: 'MAT_003', name: 'Low Birthweight Births', value: '8.4%', year: 2022, cat: 'mth', source: 'CHR / CHA' },
+  { id: 'MAT_004', name: 'Early Prenatal Care (1st Trimester)', value: '84.4%', year: 2024, cat: 'mth', source: 'Mono CHA' },
+  { id: 'ACC_001', name: 'Mental Health Providers per 100,000', value: '246.6', year: 2023, cat: 'bh', source: 'CHR / CHA' },
+  { id: 'OH_002', name: 'Dentists per 100,000', value: '46.2', year: 2022, cat: 'oh', source: 'CHR / CHA' },
+  { id: 'BH_003', name: 'Poor Mental Health Days (Adults)', value: '5.2 days/mo', year: 2021, cat: 'bh', source: 'CHR / CHA' },
+  { id: 'BH_004', name: 'Frequent Mental Distress (Adults)', value: '17%', year: 2022, cat: 'bh', source: 'CHR / CHA' },
+  { id: 'BH_005', name: 'Suicidal Ideation Rate', value: '39 per 100k', year: 2024, cat: 'bh', source: 'MHA / CHA' },
+  { id: 'BH_006', name: 'Severe Depression Risk', value: '40 per 100k', year: 2024, cat: 'bh', source: 'MHA / CHA' },
+  { id: 'SDH_001', name: 'Residents Living Far from Grocery Stores', value: '46.8%', year: 2024, cat: 'sdh', source: 'CHR / CHA' },
+  { id: 'OH_KOHA_01', name: 'Kindergarteners with Any Dental Decay (caries experience)', value: '30.8%', year: 2025, cat: 'oh', source: 'SCOHR / 2025 CHNA' },
+  { id: 'OH_KOHA_02', name: 'Kindergarteners with Untreated Dental Decay', value: '26.9%', year: 2025, cat: 'oh', source: 'SCOHR / 2025 CHNA' },
+  { id: 'OH_KOHA_03', name: 'Kindergarten OHAFs (PoA) Returned', value: '74.3%', year: 2025, cat: 'oh', source: 'SCOHR / 2025 CHNA' },
+  { id: 'OH_PREV_03', name: 'Low-Income Children 0–3 with Dental Visit', value: '10%', year: 2023, cat: 'oh', source: 'Medi-Cal' },
+  { id: 'OH_ACC_01', name: 'Dental Clinics Accepting Medi-Cal for Children', value: '1', year: 2025, cat: 'oh', source: 'County' },
+  { id: 'OH_ACC_02', name: 'Full-Time Medi-Cal-Serving Dentists', value: '0', year: 2025, cat: 'oh', source: 'County' },
+  { id: 'OH_ACC_03', name: 'Communities without a Local Dental Clinic', value: '6', year: 2025, cat: 'oh', source: 'County' },
+  { id: 'OH_MOBILE_01', name: 'Planned Mobile Dental Van Events per Year', value: '2', year: 2025, cat: 'oh', source: 'County' },
+  { id: 'OH_EQ_01', name: 'No Dental Visit Past Year (Native American)', value: '12.7%', year: 2024, cat: 'oh', source: 'CHA' },
+  { id: 'OH_EQ_02', name: 'Current Dental Issues (Hispanic/Latino)', value: '10%', year: 2024, cat: 'oh', source: 'CHA' },
+  { id: 'OH_EQ_03', name: 'Uninsured for Dental Care (Hispanic/Latino)', value: '18.3%', year: 2024, cat: 'oh', source: 'CHA' },
+  // CHKS Elementary
+  { id: 'CHKS_E_SC', name: 'CHKS Gr.5: School Connectedness', value: '72%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Elem.' },
+  { id: 'CHKS_E_AM', name: 'CHKS Gr.5: Academic Motivation', value: '77%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Elem.' },
+  { id: 'CHKS_E_CA', name: 'CHKS Gr.5: Caring Adults in School', value: '74%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Elem.' },
+  { id: 'CHKS_E_HE', name: 'CHKS Gr.5: High Expectations (Adults in School)', value: '86%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Elem.' },
+  { id: 'CHKS_E_MP', name: 'CHKS Gr.5: Meaningful Participation', value: '43%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Elem.' },
+  { id: 'CHKS_E_FS', name: 'CHKS Gr.5: Feel Safe at School', value: '74%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Elem.' },
+  { id: 'CHKS_E_SAD', name: 'CHKS Gr.5: Frequent Sadness', value: '38%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Elem.' },
+  { id: 'CHKS_E_WEL', name: 'CHKS Gr.5: Wellness (feel good and happy)', value: '72%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Elem.' },
+  { id: 'CHKS_E_BOD', name: 'CHKS Gr.5: Teased About Body Image', value: '53%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Elem.' },
+  { id: 'CHKS_E_CB', name: 'CHKS Gr.5: Cyberbullying (past 30 days)', value: '28%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Elem.' },
+  { id: 'CHKS_E_WEP', name: 'CHKS Gr.5: Saw Weapon at School (past year)', value: '39%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Elem.' },
+  { id: 'CHKS_E_AOD', name: 'CHKS Gr.5: Any Alcohol/Drug Use (lifetime)', value: '19%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Elem.' },
+  { id: 'CHKS_E_VAP', name: 'CHKS Gr.5: Ever Vaped (lifetime)', value: '6%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Elem.' },
+  // CHKS Secondary
+  { id: 'CHKS_S11_SAD', name: 'CHKS Gr.11: Chronic Sadness/Hopelessness', value: '33%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Secondary' },
+  { id: 'CHKS_S9_SAD', name: 'CHKS Gr.9: Chronic Sadness/Hopelessness', value: '23%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Secondary' },
+  { id: 'CHKS_S7_SAD', name: 'CHKS Gr.7: Chronic Sadness/Hopelessness', value: '27%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Secondary' },
+  { id: 'CHKS_S11_SUI', name: 'CHKS Gr.11: Considered Suicide (past 12 mo)', value: '22%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Secondary' },
+  { id: 'CHKS_S11_DIS', name: 'CHKS Gr.11: Social-Emotional Distress', value: '30%', year: 2024, cat: 'chks', source: 'CHKS 2023–24 Secondary' },
+  { id: 'CHKS_S11_VAPL', name: 'CHKS Gr.11: Ever Used Vape Products (lifetime)', value: '28%', year: 2024, cat: 'tob', source: 'CHKS 2023–24 Secondary' },
+  { id: 'CHKS_S11_TOBL', name: 'CHKS Gr.11: Lifetime Tobacco Use', value: '22%', year: 2024, cat: 'tob', source: 'CHKS 2023–24 Secondary' },
+  { id: 'CHKS_S11_AOD', name: 'CHKS Gr.11: Any Current AOD Use (past 30 days)', value: '22%', year: 2024, cat: 'tob', source: 'CHKS 2023–24 Secondary' },
+  { id: 'CHKS_S11_ALC', name: 'CHKS Gr.11: Alcohol Use (lifetime)', value: '35%', year: 2024, cat: 'tob', source: 'CHKS 2023–24 Secondary' },
+  { id: 'CHKS_S11_MJ', name: 'CHKS Gr.11: Marijuana Use (lifetime)', value: '22%', year: 2024, cat: 'tob', source: 'CHKS 2023–24 Secondary' },
+];
+
+const catBadge = { dem:'badge-dem', mth:'badge-mth', bh:'badge-bh', oh:'badge-oh', sdh:'badge-sdh', eco:'badge-eco', tob:'badge-tob', chks:'badge-chks' };
+const catLabel = { dem:'Demographics', mth:'Maternal', bh:'Behavioral health', oh:'Oral health', sdh:'Social determinants', eco:'Economic', tob:'Tobacco/Substance', chks:'CHKS Survey' };
+
+const tbody = document.getElementById('allTableBody');
+allData.forEach(d => {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td style="font-family:monospace;font-size:11px;color:#888780;white-space:nowrap;">${d.id}</td>
+    <td>${d.name}<br><span class="badge ${catBadge[d.cat]}">${catLabel[d.cat]}</span></td>
+    <td style="font-weight:500;">${d.value !== null ? d.value : '<span class="pending">Pending</span>'}</td>
+    <td style="color:#6b6b67;">${d.year}</td>
+    <td style="color:#6b6b67;font-size:12px;">${d.source}</td>`;
+  tbody.appendChild(tr);
+});
+
+const textColor = '#6b6b67';
+const gridColor = 'rgba(0,0,0,0.06)';
+const base = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } },
+    y: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } }
+  }
+};
+const pctY = { ...base, scales: { ...base.scales, y: { ...base.scales.y, ticks: { ...base.scales.y.ticks, callback: v => v + '%' } } } };
+
+// ---- OVERVIEW ----
+new Chart(document.getElementById('povertyChart'), {
+  type: 'bar',
+  data: {
+    labels: ['All residents', 'All children', 'Hispanic children'],
+    datasets: [
+      { label: 'Mono County', data: [11, 11, 31], backgroundColor: '#378ADD', borderRadius: 4 },
+      { label: 'California avg', data: [12, 15, 25], backgroundColor: '#B5D4F4', borderRadius: 4 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { color: textColor, font: { size: 11 }, boxWidth: 12, boxHeight: 12 } } },
+    scales: { x: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } },
+      y: { ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+new Chart(document.getElementById('bhChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Suicidal ideation', 'Severe depression'],
+    datasets: [
+      { label: 'Mono County', data: [39, 40], backgroundColor: '#D4537E', borderRadius: 4 },
+      { label: 'California avg', data: [25, 28], backgroundColor: '#B5D4F4', borderRadius: 4 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { color: textColor, font: { size: 11 }, boxWidth: 12, boxHeight: 12 } } },
+    scales: { x: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } },
+      y: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } } } }
+});
+new Chart(document.getElementById('ratesChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Children poverty', 'Teen birth rate\n(per 1,000)', 'Low birthweight', 'Freq. mental\ndistress', 'Dentists per 100k\n(÷10 for scale)'],
+    datasets: [
+      { label: 'Mono County', data: [11, 18.6, 8.4, 17, 4.62], backgroundColor: '#1D9E75', borderRadius: 4 },
+      { label: 'California avg', data: [15, 10.5, 7.4, 14, 9.29], backgroundColor: '#B5D4F4', borderRadius: 4 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { color: textColor, font: { size: 11 }, boxWidth: 12, boxHeight: 12 } } },
+    scales: { x: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
+      y: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } } } }
+});
+
+// ---- DEMOGRAPHICS ----
+new Chart(document.getElementById('demoPovChart'), {
+  type: 'bar',
+  data: { labels: ['All residents (2023)', 'All children (2023)', 'Hispanic/Latino children (2024)'],
+    datasets: [{ data: [11,11,31], backgroundColor: ['#B5D4F4','#378ADD','#185FA5'], borderRadius: 4 }] },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 } } },
+      y: { min: 0, max: 40, grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' } } } }
+});
+
+// ---- BEHAVIORAL HEALTH ----
+new Chart(document.getElementById('sadnessChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Grade 7', 'Grade 9', 'Grade 11'],
+    datasets: [{ label: 'Chronic sadness/hopelessness', data: [27, 23, 33], backgroundColor: ['#D4537E','#D4537E','#A32D2D'], borderRadius: 4 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { x: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 50, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+new Chart(document.getElementById('distressChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Grade 7', 'Grade 9', 'Grade 11'],
+    datasets: [{ label: 'Social-emotional distress', data: [19, 14, 30], backgroundColor: ['#EF9F27','#EF9F27','#C07000'], borderRadius: 4 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { x: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 50, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+new Chart(document.getElementById('suicideChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Grade 7', 'Grade 9', 'Grade 11'],
+    datasets: [{ data: [0, 0, 22], backgroundColor: ['#f1efe8','#f1efe8','#A32D2D'], borderRadius: 4 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { x: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 30, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+new Chart(document.getElementById('elemStressChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Very stressed\n(most/all of time)', 'Very lonely\n(most/all of time)', 'Frequent sadness\n(most/all of time)'],
+    datasets: [{ data: [28, 22, 38], backgroundColor: ['#D4537E','#D4537E','#D4537E'], borderRadius: 4 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { x: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 50, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+new Chart(document.getElementById('bhDetailChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Suicidal ideation\n(per 100k)', 'Severe depression\n(per 100k)', 'Freq. mental distress\n(% adults)', 'Poor MH days\n(avg/month)'],
+    datasets: [
+      { label: 'Mono County', data: [39, 40, 17, 5.2], backgroundColor: '#D4537E', borderRadius: 4 },
+      { label: 'California avg', data: [25, 28, 14, 4.4], backgroundColor: '#B5D4F4', borderRadius: 4 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { color: textColor, font: { size: 12 }, boxWidth: 12, boxHeight: 12 } } },
+    scales: { x: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } },
+      y: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } } } }
+});
+
+// ---- ORAL HEALTH ----
+new Chart(document.getElementById('oralEqChart'), {
+  type: 'bar',
+  data: { labels: ['Native American', 'Hispanic/Latino', 'White'],
+    datasets: [{ data: [12.7, 10, 6.9], backgroundColor: ['#639922','#97C459','#C0DD97'], borderRadius: 4 }] },
+  options: pctY
+});
+new Chart(document.getElementById('kohaPoaChart'), {
+  type: 'bar',
+  data: { labels: ['2022–23', '2023–24', '2024–25'],
+    datasets: [{ label: 'PoA submission rate', data: [66.9, 73.1, 74.3], backgroundColor: '#5DCAA5', borderRadius: 4 }] },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { x: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 100, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+new Chart(document.getElementById('kohaOutcomesChart'), {
+  type: 'bar',
+  data: { labels: ['Caries experience', 'Untreated decay', 'Early decay'],
+    datasets: [
+      { label: 'Mono County (2024–25)', data: [30.8, 26.9, 43.6], backgroundColor: '#EF9F27', borderRadius: 4 },
+      { label: 'CA benchmark', data: [50, 20, null], backgroundColor: '#B5D4F4', borderRadius: 4 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { color: textColor, font: { size: 11 }, boxWidth: 12, boxHeight: 12 } } },
+    scales: { x: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 70, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+new Chart(document.getElementById('dentistRatioChart'), {
+  type: 'bar',
+  data: { labels: ['Mono County', 'California avg'],
+    datasets: [{ data: [46.2, 92.9], backgroundColor: ['#E24B4A','#5DCAA5'], borderRadius: 4 }] },
+  options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } },
+    scales: { x: { min: 0, max: 110, ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } },
+      y: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } } } }
+});
+new Chart(document.getElementById('medicalUtilChart'), {
+  type: 'line',
+  data: { labels: ['2013','2014','2015','2016','2017','2018','2019','2020','2021','2022','2023'],
+    datasets: [{ label: 'Annual dental visit rate', data: [29, 32, 36, 34, 33, 34, 36, 29, 29, 33, 28],
+      borderColor: '#378ADD', backgroundColor: 'rgba(55,138,221,0.1)', tension: 0.3, fill: true, pointRadius: 4, pointBackgroundColor: '#378ADD' }] },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { x: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 60, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+
+// ---- MATERNAL ----
+new Chart(document.getElementById('maternalChart'), {
+  type: 'bar',
+  data: { labels: ['Teen birth rate\n(per 1,000)', 'Low birthweight\n(% of births)', 'Early prenatal care\n(% 1st trimester)'],
+    datasets: [
+      { label: 'Mono County', data: [18.6, 8.4, 84.4], backgroundColor: '#EF9F27', borderRadius: 4 },
+      { label: 'California avg', data: [10.5, 7.4, 84.3], backgroundColor: '#B5D4F4', borderRadius: 4 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { color: textColor, font: { size: 12 }, boxWidth: 12, boxHeight: 12 } } },
+    scales: { x: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } },
+      y: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } } } }
+});
+
+// ---- CHKS 2023-24 ----
+new Chart(document.getElementById('chksElemClimateChart'), {
+  type: 'bar',
+  data: {
+    labels: ['High expectations\n(adults in school)', 'Rule clarity', 'Facilities\nupkeep', 'High expectations\n(adults at home)', 'Academic\nmotivation', 'Antibullying\nclimate', 'Caring adults\nin school', 'School\nconnectedness', 'Parent\ninvolvement', 'SEL\nsupports', 'Meaningful\nparticipation'],
+    datasets: [{ data: [86, 88, 90, 94, 77, 74, 74, 72, 75, 64, 43],
+      backgroundColor: ['#378ADD','#378ADD','#378ADD','#1D9E75','#378ADD','#378ADD','#378ADD','#378ADD','#378ADD','#378ADD','#E24B4A'],
+      borderRadius: 4 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { x: { ticks: { color: textColor, font: { size: 9 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 100, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+
+new Chart(document.getElementById('chksSecClimateChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Caring adult\nrelationships', 'High\nexpectations', 'Meaningful\nparticipation', 'Parental\ninvolvement'],
+    datasets: [
+      { label: 'Grade 7', data: [69, 73, 24, 64], backgroundColor: '#B5D4F4', borderRadius: 3 },
+      { label: 'Grade 9', data: [72, 85, 29, 74], backgroundColor: '#378ADD', borderRadius: 3 },
+      { label: 'Grade 11', data: [80, 78, 29, 47], backgroundColor: '#185FA5', borderRadius: 3 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { color: textColor, font: { size: 11 }, boxWidth: 12, boxHeight: 12 } } },
+    scales: { x: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 100, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+
+new Chart(document.getElementById('chksSecSafetyChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Perceived\nvery safe/safe', 'Any harassment\nor bullying', 'Cyberbullying', 'Seen weapon\non campus'],
+    datasets: [
+      { label: 'Grade 7', data: [85, 40, 20, 8], backgroundColor: '#B5D4F4', borderRadius: 3 },
+      { label: 'Grade 9', data: [100, 8, 15, 0], backgroundColor: '#378ADD', borderRadius: 3 },
+      { label: 'Grade 11', data: [88, 28, 17, 0], backgroundColor: '#185FA5', borderRadius: 3 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { color: textColor, font: { size: 11 }, boxWidth: 12, boxHeight: 12 } } },
+    scales: { x: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 110, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+
+new Chart(document.getElementById('chksElemSafetyChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Teased about\nbody image', 'Mean rumors\nspread', 'Called bad\nnames', 'Hit or pushed', 'Cyberbullying\n(30 days)', 'Saw weapon\nat school'],
+    datasets: [{ data: [53, 50, 63, 42, 28, 39],
+      backgroundColor: ['#A32D2D','#D4537E','#D4537E','#EF9F27','#EF9F27','#A32D2D'], borderRadius: 4 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { x: { ticks: { color: textColor, font: { size: 9 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 80, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+
+new Chart(document.getElementById('chksHomeChart'), {
+  type: 'bar',
+  data: {
+    labels: ['High expect.\nat home', 'High expect.\nat school', 'Parent\ninvolvement', 'Caring adults\nat school', 'School\nconnected', 'Meaningful\nparticipation'],
+    datasets: [{ data: [94, 86, 75, 74, 72, 43],
+      backgroundColor: ['#1D9E75','#378ADD','#378ADD','#378ADD','#378ADD','#EF9F27'], borderRadius: 4 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { x: { ticks: { color: textColor, font: { size: 9 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 110, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+
+new Chart(document.getElementById('chksHelpChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Talk to\nfriends', 'Talk to\nfamily', 'Talk to\nteacher/adult', 'Be afraid\nto get help', 'Not know\nwhat to do', 'Seek\ncounselor'],
+    datasets: [{ data: [66, 56, 38, 31, 31, 19],
+      backgroundColor: ['#5DCAA5','#5DCAA5','#378ADD','#E24B4A','#E24B4A','#EF9F27'], borderRadius: 4 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { x: { ticks: { color: textColor, font: { size: 9 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 80, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+
+new Chart(document.getElementById('chksWellbeingChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Life\nsatisfaction', 'Optimism', 'Chronic\nsadness', 'Considered\nsuicide'],
+    datasets: [
+      { label: 'Grade 7', data: [71, 60, 27, 0], backgroundColor: '#B5D4F4', borderRadius: 3 },
+      { label: 'Grade 9', data: [60, 54, 23, 0], backgroundColor: '#378ADD', borderRadius: 3 },
+      { label: 'Grade 11', data: [67, 52, 33, 22], backgroundColor: '#A32D2D', borderRadius: 3 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { color: textColor, font: { size: 11 }, boxWidth: 12, boxHeight: 12 } } },
+    scales: { x: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 100, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+
+// ---- TOBACCO ----
+new Chart(document.getElementById('tobLifetimeChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Ever used\nvape products', 'Lifetime tobacco\nuse (any)', 'Ever smoked\nwhole cigarette', 'Lifetime alcohol\nuse'],
+    datasets: [
+      { label: 'Grade 7', data: [0, 0, 0, 0], backgroundColor: '#B5D4F4', borderRadius: 3 },
+      { label: 'Grade 9', data: [0, 0, 0, 0], backgroundColor: '#EF9F27', borderRadius: 3 },
+      { label: 'Grade 11', data: [28, 22, 6, 35], backgroundColor: '#E24B4A', borderRadius: 3 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { color: textColor, font: { size: 11 }, boxWidth: 12, boxHeight: 12 } } },
+    scales: { x: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 45, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+
+new Chart(document.getElementById('tobCurrentChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Current tobacco\nuse (any)', 'Current vaping', 'Current cigarette\nsmoking', 'Current marijuana\nuse'],
+    datasets: [
+      { label: 'Grade 7', data: [0, 0, 0, 0], backgroundColor: '#B5D4F4', borderRadius: 3 },
+      { label: 'Grade 9', data: [0, 0, 0, 0], backgroundColor: '#EF9F27', borderRadius: 3 },
+      { label: 'Grade 11', data: [6, 6, 0, 11], backgroundColor: '#E24B4A', borderRadius: 3 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { color: textColor, font: { size: 11 }, boxWidth: 12, boxHeight: 12 } } },
+    scales: { x: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 20, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+
+new Chart(document.getElementById('tobHarmChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Smoke\noccasionally', 'Smoke 1+\npacks/day', 'Vape\noccasionally', 'Vape\nseveral/day'],
+    datasets: [
+      { label: 'Grade 7', data: [13, 53, 21, 47], backgroundColor: '#B5D4F4', borderRadius: 3 },
+      { label: 'Grade 9', data: [8, 46, 8, 54], backgroundColor: '#EF9F27', borderRadius: 3 },
+      { label: 'Grade 11', data: [22, 72, 39, 89], backgroundColor: '#E24B4A', borderRadius: 3 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { color: textColor, font: { size: 11 }, boxWidth: 12, boxHeight: 12 } } },
+    scales: { x: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 100, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+
+new Chart(document.getElementById('tobAccessChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Cigarettes\nvery difficult', 'Vape products\nvery difficult'],
+    datasets: [
+      { label: 'Grade 7', data: [73, 67], backgroundColor: '#B5D4F4', borderRadius: 3 },
+      { label: 'Grade 9', data: [31, 23], backgroundColor: '#EF9F27', borderRadius: 3 },
+      { label: 'Grade 11', data: [33, 22], backgroundColor: '#E24B4A', borderRadius: 3 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { color: textColor, font: { size: 11 }, boxWidth: 12, boxHeight: 12 } } },
+    scales: { x: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 100, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+
+new Chart(document.getElementById('tobElemChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Think smoking\nvery bad', 'Think vaping\nvery bad', 'Friends\nwho vape', 'Ever vaped\n(lifetime)', 'Class discussed\nsmoking', 'Class discussed\nvaping'],
+    datasets: [{ data: [94, 81, 13, 6, 66, 56],
+      backgroundColor: ['#1D9E75','#1D9E75','#E24B4A','#E24B4A','#378ADD','#378ADD'], borderRadius: 4 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { x: { ticks: { color: textColor, font: { size: 9 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 110, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+
+new Chart(document.getElementById('tobPolicyChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Grade 7', 'Grade 9', 'Grade 11'],
+    datasets: [{ label: 'School bans tobacco/vaping (aware)', data: [73, 54, 83],
+      backgroundColor: ['#5DCAA5','#EF9F27','#5DCAA5'], borderRadius: 4 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { x: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 100, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+
+new Chart(document.getElementById('tobContextChart'), {
+  type: 'bar',
+  data: {
+    labels: ['ESU Gr.11 lifetime\nvaping (CHKS 2024)', 'CA 9–12 grade\ncurrent vaping (2022)', 'National HS\ncurrent vaping (2023)', 'Mono adult\nsmoking rate'],
+    datasets: [{ data: [28, 14, 10, 11],
+      backgroundColor: ['#E24B4A','#B5D4F4','#B5D4F4','#EF9F27'], borderRadius: 4 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { x: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
+      y: { min: 0, max: 35, ticks: { color: textColor, font: { size: 11 }, callback: v => v + '%' }, grid: { color: gridColor } } } }
+});
+</script>
+</body>
+</html>
